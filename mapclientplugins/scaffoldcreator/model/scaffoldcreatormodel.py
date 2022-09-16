@@ -389,6 +389,29 @@ class ScaffoldCreatorModel(object):
         annotationGroup = findAnnotationGroupByName(self.getAnnotationGroups(), annotationGroupName)
         self.setCurrentAnnotationGroup(annotationGroup)
 
+    def addGroupToCurrentAnnotationGroup(self, annotationGroup):
+        """
+        Set annotationGroup as current and replace the selection with its objects.
+        :param annotationGroup: AnnotationGroup to select.
+        """
+        fieldmodule = self._region.getFieldmodule()
+        with ChangeManager(fieldmodule):
+            scene = self._region.getScene()
+            selectionGroup = get_scene_selection_group(scene)
+            if annotationGroup:
+                if not selectionGroup:
+                    selectionGroup = create_scene_selection_group(scene)
+                group = annotationGroup.getGroup()
+                group_add_group_elements(selectionGroup, group, group_get_highest_dimension(group))
+            else:
+                if selectionGroup:
+                    selectionGroup.clear()
+                    scene.setSelectionField(Field())
+
+    def addGroupToCurrentAnnotationGroupByName(self, annotationGroupName):
+        annotationGroup = findAnnotationGroupByName(self.getAnnotationGroups(), annotationGroupName)
+        self.addGroupToCurrentAnnotationGroup(annotationGroup)
+
     def _setScaffoldType(self, scaffoldType):
         if len(self._scaffoldPackages) == 1:
             # root scaffoldPackage

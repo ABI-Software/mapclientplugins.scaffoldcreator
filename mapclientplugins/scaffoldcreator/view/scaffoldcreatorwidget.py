@@ -8,6 +8,7 @@ from functools import partial
 
 from mapclientplugins.scaffoldcreator.view.ui_scaffoldcreatorwidget import Ui_ScaffoldCreatorWidget
 from mapclientplugins.scaffoldcreator.view.functionoptionsdialog import FunctionOptionsDialog
+from mapclientplugins.scaffoldcreator.view.creategroupdialog import CreateGroupDialog
 from opencmiss.maths.vectorops import dot, magnitude, mult, normalize, sub
 from opencmiss.utils.zinc.field import fieldIsManagedCoordinates
 from scaffoldmaker.scaffoldpackage import ScaffoldPackage
@@ -275,6 +276,18 @@ class ScaffoldCreatorWidget(QtWidgets.QWidget):
         self._refreshCurrentAnnotationGroupSettings()
 
     def _annotationGroupNewButtonClicked(self):
+        reply = QtWidgets.QMessageBox.question(
+                self, 'Confirm action',
+                'Add other groups?',
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No, QtWidgets.QMessageBox.No)
+        if reply == QtWidgets.QMessageBox.Yes:
+            groupList = []
+            annotationGroups = self._scaffold_model.getAnnotationGroups()
+            dlg = CreateGroupDialog(annotationGroups, self)
+            if dlg.exec_():
+                groupList = dlg.getSelectedGroupList()
+            for i in groupList:
+                self._scaffold_model.addGroupToCurrentAnnotationGroupByName(i)
         self._scaffold_model.createUserAnnotationGroup()
         self._refreshAnnotationGroups()
         self._refreshCurrentAnnotationGroupSettings()
@@ -297,7 +310,7 @@ class ScaffoldCreatorWidget(QtWidgets.QWidget):
 
     def _annotationGroupDeleteButtonClicked(self):
         annotationGroup = self._scaffold_model.getCurrentAnnotationGroup()
-        if annotationGroup:
+        if annotationGroup: 
             reply = QtWidgets.QMessageBox.question(
                 self, 'Confirm action',
                 'Delete annotation group \'' + annotationGroup.getName() + '\'?',

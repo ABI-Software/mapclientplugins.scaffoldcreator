@@ -8,36 +8,12 @@ from functools import partial
 
 from mapclientplugins.scaffoldcreator.view.ui_scaffoldcreatorwidget import Ui_ScaffoldCreatorWidget
 from mapclientplugins.scaffoldcreator.view.functionoptionsdialog import FunctionOptionsDialog
+
 from cmlibs.maths.vectorops import dot, magnitude, mult, normalize, sub
+from cmlibs.widgets.utils import parse_vector, parse_int
 from cmlibs.widgets.groupeditorwidget import GroupEditorWidget
 from cmlibs.utils.zinc.field import fieldIsManagedCoordinates
 from scaffoldmaker.scaffoldpackage import ScaffoldPackage
-
-
-def QLineEdit_parseInt(lineedit):
-    """
-    Return integer from line edit text, or None if invalid.
-    """
-    try:
-        text = lineedit.text()
-        return int(text)
-    except ValueError:
-        pass
-    return None
-
-
-def QLineEdit_parseVector(lineedit):
-    """
-    Return one or more component real vector as list from comma separated text in QLineEdit widget
-    or None if invalid.
-    """
-    try:
-        text = lineedit.text()
-        values = [float(value) for value in text.split(",")]
-        return values
-    except ValueError:
-        pass
-    return None
 
 
 def get_zinc_groups(annotation_groups):
@@ -379,7 +355,7 @@ class ScaffoldCreatorWidget(QtWidgets.QWidget):
         isUser = self._scaffold_model.isUserAnnotationGroup(annotationGroup)
         if isUser and annotationGroup.isMarker():
             markerMaterialCoordinatesField = self._ui.markerMaterialCoordinatesField_fieldChooser.getField()
-            values = QLineEdit_parseVector(self._ui.markerMaterialCoordinates_lineEdit)
+            values = parse_vector(self._ui.markerMaterialCoordinates_lineEdit)
             if isinstance(values, list) and markerMaterialCoordinatesField:
                 componentsCount = markerMaterialCoordinatesField.getNumberOfComponents()
                 if len(values) < componentsCount:
@@ -395,7 +371,7 @@ class ScaffoldCreatorWidget(QtWidgets.QWidget):
         isUser = self._scaffold_model.isUserAnnotationGroup(annotationGroup)
         if isUser and annotationGroup.isMarker():
             xi = annotationGroup.getMarkerLocation()[1]
-            identifier = QLineEdit_parseInt(self._ui.markerElement_lineEdit)
+            identifier = parse_int(self._ui.markerElement_lineEdit)
             mesh = self._scaffold_model.getMesh()
             if isinstance(identifier, int) and isinstance(xi, list):
                 element = mesh.findElementByIdentifier(identifier)
@@ -411,7 +387,7 @@ class ScaffoldCreatorWidget(QtWidgets.QWidget):
         isUser = self._scaffold_model.isUserAnnotationGroup(annotationGroup)
         if isUser and annotationGroup.isMarker():
             element, oldXi = annotationGroup.getMarkerLocation()
-            xi = QLineEdit_parseVector(self._ui.markerXiCoordinates_lineEdit)
+            xi = parse_vector(self._ui.markerXiCoordinates_lineEdit)
             if element.isValid() and isinstance(xi, list):
                 dimension = element.getDimension()
                 if len(xi) < dimension:

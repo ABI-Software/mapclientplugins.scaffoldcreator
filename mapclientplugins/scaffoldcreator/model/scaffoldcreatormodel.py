@@ -3,6 +3,7 @@ Scaffold Creator Model class. Generates Zinc meshes using scaffoldmaker.
 """
 
 import copy
+import json
 import os
 import math
 import sys
@@ -1284,20 +1285,17 @@ class ScaffoldCreatorModel(object):
         self._region.writeFile(file_name)
 
     @staticmethod
-    def getAnnotationsFilename(filename_stem):
-        return filename_stem + '_annotations.csv'
+    def getMetadataFilename(filename_stem):
+        return filename_stem + '-metadata.json'
 
-    def writeAnnotations(self, filename_stem):
-        annotationFilename = self.getAnnotationsFilename(filename_stem)
-        with open(annotationFilename, 'w') as outstream:
-            outstream.write('Term ID,Group name\n')
-            annotationGroups = self.getAnnotationGroups()
-            termNameIds = []
-            for annotationGroup in annotationGroups:
-                termNameIds.append((annotationGroup.getName(), annotationGroup.getId()))
-            termNameIds.sort()
-            for termNameId in termNameIds:
-                outstream.write(termNameId[1] + ',' + termNameId[0] + '\n')
+    def writeMetadata(self, filename_stem):
+        metadataFilename = self.getMetadataFilename(filename_stem)
+        metadataDict = {"id": "scaffold creator metadata", "version": "1.0.0"}
+        metadataDict["annotations"] = [{"id": annotationGroup.getId(), "name": annotationGroup.getName()}
+                                       for annotationGroup in self.getAnnotationGroups()]
+        metadataDict.update(self._scaffoldPackages[0].getMetadata())
+        with open(metadataFilename, 'w') as outstream:
+            json.dump(metadataDict, outstream, sort_keys=True, indent=4)
 
     def exportToVtk(self, filename_stem):
         base_name = os.path.basename(filename_stem)

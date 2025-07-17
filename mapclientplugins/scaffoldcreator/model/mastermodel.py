@@ -77,8 +77,8 @@ class MasterModel(object):
     def getOutputModelFilename(self):
         return self._filenameStem + '.exf'
 
-    def getOutputAnnotationsFilename(self):
-        return self._creator_model.getAnnotationsFilename(self._filenameStem)
+    def getOutputJsonMetadataFilename(self):
+        return self._creator_model.getMetadataFilename(self._filenameStem)
 
     def getCreatorModel(self):
         return self._creator_model
@@ -102,7 +102,7 @@ class MasterModel(object):
         self._saveSettings()
         self._creator_model.done()
         self._creator_model.writeModel(self.getOutputModelFilename())
-        self._creator_model.writeAnnotations(self._filenameStem)
+        self._creator_model.writeMetadata(self._filenameStem)
         self._creator_model.exportToVtk(self._filenameStem)
 
     def _getSettings(self):

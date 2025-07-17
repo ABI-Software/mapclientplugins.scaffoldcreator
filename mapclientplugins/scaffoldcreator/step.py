@@ -36,16 +36,23 @@ class ScaffoldCreator(WorkflowStepMountPoint):
                        'http://physiomeproject.org/workflow/1.0/rdf-schema#file_location'),
                       ('http://physiomeproject.org/workflow/1.0/rdf-schema#port',
                        'http://physiomeproject.org/workflow/1.0/rdf-schema#provides',
-                       'https://github.com/ABI-Software/scaffoldmaker#annotation_groups_file_location')
+                       'http://physiomeproject.org/workflow/1.0/rdf-schema#json_file_location')
                       ])
         # Port data:
         self._portData0 = None  # http://physiomeproject.org/workflow/1.0/rdf-schema#file_location
         self._port1_inputZincDataFile = None  # http://physiomeproject.org/workflow/1.0/rdf-schema#file_location
-        self._port2_annotationsFilename = None  # https://github.com/ABI-Software/scaffoldmaker#annotation_groups_file_location
+        self._port2_jsonMetadataFilename = None  # http://physiomeproject.org/workflow/1.0/rdf-schema#json_file_location
         # Config:
         self._config = {'identifier': '', 'AutoDone': False, 'enable-auto-done': False}
         self._model = None
         self._view = None
+
+    def _create_model(self):
+        """
+        Ensure self._model is constructed if not already existing.
+        """
+        if not self._model:
+            self._model = MasterModel(self._location, self._config['identifier'])
 
     def execute(self):
         """
@@ -54,7 +61,7 @@ class ScaffoldCreator(WorkflowStepMountPoint):
         """
         QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
         try:
-            self._model = MasterModel(self._location, self._config['identifier'])
+            self._create_model()
             if self._port1_inputZincDataFile:
                 self._model.setSegmentationDataFile(self._port1_inputZincDataFile)
             self._view = ScaffoldCreatorWidget(self._model)
@@ -69,7 +76,7 @@ class ScaffoldCreator(WorkflowStepMountPoint):
 
     def _my_done_execution(self):
         self._portData0 = self._model.getOutputModelFilename()
-        self._port2_annotationsFilename = self._model.getOutputAnnotationsFilename()
+        self._port2_jsonMetadataFilename = self._model.getOutputJsonMetadataFilename()
         self._view = None
         self._model = None
         self._config['enable-auto-done'] = os.path.isfile(self._portData0)
@@ -86,7 +93,7 @@ class ScaffoldCreator(WorkflowStepMountPoint):
         if index == 0:
             return self._portData0  # http://physiomeproject.org/workflow/1.0/rdf-schema#file_location
 
-        return self._port2_annotationsFilename
+        return self._port2_jsonMetadataFilename
 
     def setPortData(self, index, dataIn):
         """
@@ -165,6 +172,5 @@ class ScaffoldCreator(WorkflowStepMountPoint):
         self._configured = d.validate()
 
     def getAdditionalConfigFiles(self):
-        if self._model is None:
-            self._model = MasterModel(self._location, self._config['identifier'])
+        self._create_model()
         return [self._model.getSettingsFilename()]

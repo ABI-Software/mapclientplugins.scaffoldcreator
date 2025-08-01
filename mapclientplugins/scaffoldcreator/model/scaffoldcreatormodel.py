@@ -1245,7 +1245,7 @@ class ScaffoldCreatorModel(object):
             pointattr.setLabelField(markerName)
             pointattr.setGlyphShapeType(Glyph.SHAPE_TYPE_CROSS)
             pointattr.setBaseSize(2 * glyphWidth)
-            markerPoints.setMaterial(self._materialmodule.findMaterialByName('yellow'))
+            markerPoints.setMaterial(self._materialmodule.findMaterialByName('white'))
             markerPoints.setName('displayMarkerPoints')
             markerPoints.setVisibilityFlag(self.isDisplayMarkerPoints())
 

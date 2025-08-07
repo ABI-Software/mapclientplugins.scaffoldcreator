@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>ScaffoldCreatorMainWidget</class>
- <widget class="QMainWindow" name="ScaffoldCreatorMainWidget">
+ <class>ScaffoldCreatorWidget</class>
+ <widget class="QMainWindow" name="ScaffoldCreatorWidget">
   <property name="geometry">
    <rect>
     <x>0</x>

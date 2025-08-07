@@ -7,15 +7,16 @@ from PySide6 import QtCore, QtWidgets
 from functools import partial
 
 from mapclientplugins.scaffoldcreator.view.functionoptionsdialog import FunctionOptionsDialog
-from mapclientplugins.scaffoldcreator.view.ui_scaffoldcreatormainwidget import Ui_ScaffoldCreatorMainWidget
-from mapclientplugins.scaffoldcreator.view.ui_displaysettingswidget import Ui_DisplaySettings
+from mapclientplugins.scaffoldcreator.view.ui_scaffoldcreatorwidget import Ui_ScaffoldCreatorWidget
 from mapclientplugins.scaffoldcreator.view.ui_scaffoldsettingswidget import Ui_ScaffoldSettings
-from mapclientplugins.scaffoldcreator.view.ui_buttonswidget import Ui_Buttons
 from mapclientplugins.scaffoldcreator.view.ui_annotationtoolswidget import Ui_AnnotationTools
 
 from cmlibs.maths.vectorops import dot, magnitude, mult, normalize, sub
 from cmlibs.widgets.collapsibleboxwidget import CollapsibleBox
 from cmlibs.widgets.groupeditorwidget import GroupEditorWidget
+from cmlibs.widgets.helpers.widgetvisibility import setting_visibility
+from cmlibs.widgets.ui.ui_displaysettingswidget import Ui_DisplaySettings
+from cmlibs.widgets.ui.ui_buttonswidget import Ui_Buttons
 from cmlibs.widgets.utils import parse_vector, parse_int
 from cmlibs.utils.zinc.field import fieldIsManagedCoordinates
 from scaffoldmaker.scaffoldpackage import ScaffoldPackage
@@ -36,7 +37,7 @@ class ScaffoldCreatorWidget(QtWidgets.QMainWindow):
 
     def __init__(self, model, parent=None):
         super(ScaffoldCreatorWidget, self).__init__(parent)
-        self._ui = Ui_ScaffoldCreatorMainWidget()
+        self._ui = Ui_ScaffoldCreatorWidget()
         self._ui.setupUi(self)
 
         self._model = model
@@ -84,6 +85,8 @@ class ScaffoldCreatorWidget(QtWidgets.QMainWindow):
         form_container = QtWidgets.QWidget()
         self._buttons_ui.setupUi(form_container)
         layout.addWidget(form_container)
+
+        setting_visibility(self._display_settings_ui, 'scaffoldcreator')
 
         self._dock_widget = QtWidgets.QDockWidget("Controls", self)
         self._dock_widget.setObjectName("ControlsDock")

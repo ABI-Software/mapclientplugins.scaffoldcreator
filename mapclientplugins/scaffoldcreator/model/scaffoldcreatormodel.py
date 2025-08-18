@@ -1,13 +1,6 @@
 """
 Scaffold Creator Model class. Generates Zinc meshes using scaffoldmaker.
 """
-
-import copy
-import json
-import os
-import math
-import sys
-
 from cmlibs.maths.vectorops import axis_angle_to_rotation_matrix, euler_to_rotation_matrix, matrix_mult, \
     rotation_matrix_to_euler
 from cmlibs.utils.zinc.field import fieldIsManagedCoordinates, determine_node_field_derivatives
@@ -16,19 +9,23 @@ from cmlibs.utils.zinc.general import ChangeManager, HierarchicalChangeManager
 from cmlibs.utils.zinc.group import group_add_group_elements, group_get_highest_dimension, \
     identifier_ranges_fix, identifier_ranges_from_string, identifier_ranges_to_string, mesh_group_to_identifier_ranges
 from cmlibs.utils.zinc.region import determine_appropriate_glyph_size
-from cmlibs.utils.zinc.scene import scene_create_selection_group, scene_get_selection_group, scene_create_node_derivative_graphics
-
+from cmlibs.utils.zinc.scene import (
+    scene_create_selection_group, scene_get_selection_group, scene_create_node_derivative_graphics)
 from cmlibs.zinc.field import Field, FieldGroup
 from cmlibs.zinc.glyph import Glyph
 from cmlibs.zinc.graphics import Graphics
-from cmlibs.zinc.node import Node
-from cmlibs.zinc.result import RESULT_OK, RESULT_WARNING_PART_DONE
 from cmlibs.zinc.scenecoordinatesystem import SCENECOORDINATESYSTEM_WORLD
 from scaffoldmaker.annotation.annotationgroup import findAnnotationGroupByName, getAnnotationMarkerGroup, \
     getAnnotationMarkerLocationField, getAnnotationMarkerNameField
 from scaffoldmaker.scaffolds import Scaffolds
 from scaffoldmaker.scaffoldpackage import ScaffoldPackage
 from scaffoldmaker.utils.exportvtk import ExportVtk
+
+import copy
+import math
+import os
+import sys
+
 
 STRING_FLOAT_FORMAT = '{:.8g}'
 
@@ -90,7 +87,7 @@ def parseVector3(vectorText: str, delimiter, defaultValue):
     return vector
 
 
-class ScaffoldCreatorModel(object):
+class ScaffoldCreatorModel:
     """
     Framework for generating meshes of a number of types, with mesh type specific options
     """
@@ -102,7 +99,7 @@ class ScaffoldCreatorModel(object):
         self._parentRegion = parent_region
         self._materialmodule = material_module
         self._region = None
-        self._modelCoordinatesField = None
+        self._displayScaffoldCoordinateField = None
         self._fieldmodulenotifier = None
         self._currentAnnotationGroup = None
         self._customParametersCallback = None
@@ -110,18 +107,19 @@ class ScaffoldCreatorModel(object):
         self._transformationChangeCallback = None
         self._deleteElementRanges = []
         self._nodeDerivativeLabels = ['D1', 'D2', 'D3', 'D12', 'D13', 'D23', 'D123']
-        # list of nested scaffold packages to that being edited, with their parent option names
-        # discover all mesh types and set the current from the default
-        scaffolds = Scaffolds()
-        self._allScaffoldTypes = scaffolds.getScaffoldTypes()
-        scaffoldType = scaffolds.getDefaultScaffoldType()
+        scaffoldType = Scaffolds.getDefaultScaffoldType()
         scaffoldPackage = ScaffoldPackage(scaffoldType)
         self._parameterSetName = scaffoldType.getParameterSetNames()[0]
+        # lists of nested scaffold packages to the one currently being edited, and their parent option names
         self._scaffoldPackages = [scaffoldPackage]
         self._scaffoldPackageOptionNames = [None]
+        # settings which control how the scaffold is created
         self._settings = {
             'scaffoldPackage': scaffoldPackage,
-            'deleteElementRanges': '',
+            'deleteElementRanges': ''
+        }
+        # settings which control which graphics are displayed
+        self._displaySettings = {
             'displayNodePoints': False,
             'displayNodeNumbers': False,
             'displayNodeDerivatives': 0,  # tri-state: 0=show none, 1=show selected, 2=show all
@@ -139,7 +137,7 @@ class ScaffoldCreatorModel(object):
             'displayAxes': True,
             'displayMarkerPoints': False,
             'displayZeroJacobianContours': False,
-            'modelCoordinatesField': 'coordinates'
+            'displayModelCoordinatesField': 'coordinates'
         }
         self._customScaffoldPackage = None  # temporary storage of custom mesh options and edits, to switch back to
         self._unsavedNodeEdits = False  # Whether nodes have been edited since ScaffoldPackage meshEdits last updated
@@ -175,50 +173,50 @@ class ScaffoldCreatorModel(object):
     def getRegion(self):
         return self._region
 
-    def _resetModelCoordinatesField(self):
-        self._modelCoordinatesField = None
+    def _resetDisplayModelCoordinatesField(self):
+        self._displayModelCoordinatesField = None
 
-    def _setModelCoordinatesField(self, modelCoordinatesField):
-        if modelCoordinatesField:
-            self._modelCoordinatesField = modelCoordinatesField.castFiniteElement()
-            if self._modelCoordinatesField.isValid():
-                self._settings['modelCoordinatesField'] = modelCoordinatesField.getName()
+    def _setDisplayModelCoordinatesField(self, displayModelCoordinatesField):
+        if displayModelCoordinatesField:
+            self._displayModelCoordinatesField = displayModelCoordinatesField.castFiniteElement()
+            if self._displayModelCoordinatesField.isValid():
+                self._displaySettings['displayModelCoordinatesField'] = displayModelCoordinatesField.getName()
                 return
         # reset
-        self._modelCoordinatesField = None
-        self._settings['modelCoordinatesField'] = "coordinates"
+        self._displayModelCoordinatesField = None
+        self._displaySettings['displayModelCoordinatesField'] = "coordinates"
 
-    def _discoverModelCoordinatesField(self):
+    def _discoverDisplayModelCoordinatesField(self):
         """
-        Discover new model coordintes field by previous name or default "coordinates" or first found.
+        Discover new model coordinates field by previous name or default "coordinates" or first found.
         """
         fieldmodule = self._region.getFieldmodule()
-        modelCoordinatesField = fieldmodule.findFieldByName(self._settings['modelCoordinatesField'])
-        if not fieldIsManagedCoordinates(modelCoordinatesField):
-            if self._settings['modelCoordinatesField'] != "coordinates":
-                modelCoordinatesField = fieldmodule.findFieldByName("coordinates").castFiniteElement()
-            if not fieldIsManagedCoordinates(modelCoordinatesField):
+        displayModelCoordinatesField = fieldmodule.findFieldByName(self._displaySettings['displayModelCoordinatesField'])
+        if not fieldIsManagedCoordinates(displayModelCoordinatesField):
+            if self._displaySettings['displayModelCoordinatesField'] != "coordinates":
+                displayModelCoordinatesField = fieldmodule.findFieldByName("coordinates").castFiniteElement()
+            if not fieldIsManagedCoordinates(displayModelCoordinatesField):
                 fieldIter = fieldmodule.createFielditerator()
                 field = fieldIter.next()
                 while field.isValid():
                     if fieldIsManagedCoordinates(field):
-                        modelCoordinatesField = field.castFiniteElement()
+                        displayModelCoordinatesField = field.castFiniteElement()
                         break
                     field = fieldIter.next()
                 else:
-                    modelCoordinatesField = None
-        self._setModelCoordinatesField(modelCoordinatesField)
+                    displayModelCoordinatesField = None
+        self._setDisplayModelCoordinatesField(displayModelCoordinatesField)
 
-    def getModelCoordinatesField(self):
-        return self._modelCoordinatesField
+    def getDisplayModelCoordinatesField(self):
+        return self._displayModelCoordinatesField
 
-    def setModelCoordinatesField(self, modelCoordinatesField):
+    def setDisplayModelCoordinatesField(self, displayModelCoordinatesField):
         """
         For outside use, sets field and rebuilds graphics.
         """
-        self._setModelCoordinatesField(modelCoordinatesField)
-        if not self._modelCoordinatesField:
-            self._discoverModelCoordinatesField()
+        self._setDisplayModelCoordinatesField(displayModelCoordinatesField)
+        if not self._displayModelCoordinatesField:
+            self._discoverDisplayModelCoordinatesField()
         self._createGraphics()
 
     def getMeshEditsGroup(self):
@@ -415,16 +413,10 @@ class ScaffoldCreatorModel(object):
         self._customScaffoldPackage = None
         self._unsavedNodeEdits = False
         self._parameterSetName = self.getEditScaffoldParameterSetNames()[0]
-        self._generateMesh()
-
-    def _getScaffoldTypeByName(self, name):
-        for scaffoldType in self._allScaffoldTypes:
-            if scaffoldType.getName() == name:
-                return scaffoldType
-        return None
+        self.generate()
 
     def setScaffoldTypeByName(self, name):
-        scaffoldType = self._getScaffoldTypeByName(name)
+        scaffoldType = Scaffolds.findScaffoldTypeByName(name)
         if scaffoldType is not None:
             parentScaffoldType = self.getParentScaffoldType()
             assert (not parentScaffoldType) or (scaffoldType in parentScaffoldType.getOptionValidScaffoldTypes(
@@ -437,7 +429,7 @@ class ScaffoldCreatorModel(object):
         parentScaffoldType = self.getParentScaffoldType()
         validScaffoldTypes = parentScaffoldType.getOptionValidScaffoldTypes(
             self._scaffoldPackageOptionNames[-1]) if parentScaffoldType else None
-        for scaffoldType in self._allScaffoldTypes:
+        for scaffoldType in Scaffolds.getScaffoldTypes():
             if (not parentScaffoldType) or (scaffoldType in validScaffoldTypes):
                 scaffoldTypeNames.append(scaffoldType.getName())
         return scaffoldTypeNames
@@ -549,7 +541,7 @@ class ScaffoldCreatorModel(object):
         self._scaffoldPackages.append(scaffoldPackage)
         self._scaffoldPackageOptionNames.append(optionName)
         self._checkCustomParameterSet()
-        self._generateMesh()
+        self.generate()
 
     def endEditScaffoldPackageOption(self):
         """
@@ -563,7 +555,7 @@ class ScaffoldCreatorModel(object):
         settings = self.getEditScaffoldSettings()
         settings[optionName] = copy.deepcopy(scaffoldPackage)
         self._checkCustomParameterSet()
-        self._generateMesh()
+        self.generate()
 
     def getInteractiveFunctions(self):
         """
@@ -638,7 +630,7 @@ class ScaffoldCreatorModel(object):
             self._settings['scaffoldPackage'] = self._scaffoldPackages[0]
         self._parameterSetName = parameterSetName
         self._unsavedNodeEdits = False
-        self._generateMesh()
+        self.generate()
 
     def setScaffoldOption(self, key, value):
         """
@@ -680,7 +672,7 @@ class ScaffoldCreatorModel(object):
         if settings[key] != oldValue:
             self._clearMeshEdits()
             self._useCustomScaffoldPackage()
-            self._generateMesh()
+            self.generate()
         return dependentChanges
 
     def getDeleteElementsRangesText(self):
@@ -699,7 +691,7 @@ class ScaffoldCreatorModel(object):
     def setDeleteElementsRangesText(self, elementRangesTextIn):
         if self._parseDeleteElementsRangesText(elementRangesTextIn):
             self._updateScaffoldEdits()
-            self._generateMesh()
+            self.generate()
 
     def deleteElementsSelection(self):
         """
@@ -717,7 +709,7 @@ class ScaffoldCreatorModel(object):
             oldText = self._settings['deleteElementRanges']
             self._settings['deleteElementRanges'] = identifier_ranges_to_string(elementRanges)
             if self._settings['deleteElementRanges'] != oldText:
-                self._generateMesh()
+                self.generate()
 
     def applyTransformation(self, editCoordinatesField):
         """
@@ -773,10 +765,10 @@ class ScaffoldCreatorModel(object):
         self._transformationChangeCallback = transformationChangeCallback
 
     def _getVisibility(self, graphicsName):
-        return self._settings[graphicsName]
+        return self._displaySettings[graphicsName]
 
     def _setVisibility(self, graphicsName, show):
-        self._settings[graphicsName] = show
+        self._displaySettings[graphicsName] = show
         graphics = self._region.getScene().findGraphicsByName(graphicsName)
         graphics.setVisibilityFlag(show)
 
@@ -811,10 +803,10 @@ class ScaffoldCreatorModel(object):
         self._setVisibility('displayLines', show)
 
     def isDisplayLinesExterior(self):
-        return self._settings['displayLinesExterior']
+        return self._displaySettings['displayLinesExterior']
 
     def setDisplayLinesExterior(self, isExterior):
-        self._settings['displayLinesExterior'] = isExterior
+        self._displaySettings['displayLinesExterior'] = isExterior
         lines = self._region.getScene().findGraphicsByName('displayLines')
         lines.setExterior(self.isDisplayLinesExterior())
 
@@ -822,19 +814,19 @@ class ScaffoldCreatorModel(object):
         return self._getVisibility('displayModelRadius')
 
     def setDisplayModelRadius(self, show):
-        if show != self._settings['displayModelRadius']:
-            self._settings['displayModelRadius'] = show
+        if show != self._displaySettings['displayModelRadius']:
+            self._displaySettings['displayModelRadius'] = show
             self._createGraphics()
 
     def getDisplayNodeDerivatives(self):
         """
         :return: tri-state: 0=show none, 1=show selected, 2=show all
         """
-        return self._settings['displayNodeDerivatives']
+        return self._displaySettings['displayNodeDerivatives']
 
     def _setMultipleGraphicsVisibility(self, graphicsPartName, show, selectMode=None):
         """
-        Ensure visibility of all graphics starting with graphicsStemName is set to boolean show.
+        Ensure visibility of all graphics starting with graphicsPartName is set to boolean show.
         :param selectMode: Optional selectMode to set at the same time.
         """
         scene = self._region.getScene()
@@ -851,7 +843,7 @@ class ScaffoldCreatorModel(object):
         """
         :param triState: From Qt::CheckState: 0=show none, 1=show selected, 2=show all
         """
-        self._settings['displayNodeDerivatives'] = triState
+        self._displaySettings['displayNodeDerivatives'] = triState
         displayVersion = self.getDisplayNodeDerivativeVersion()
         with ChangeManager(self._scene):
             for nodeDerivativeLabel in self._nodeDerivativeLabels:
@@ -869,14 +861,14 @@ class ScaffoldCreatorModel(object):
         """
         :param nodeDerivativeLabel: Label from self._nodeDerivativeLabels ('D1', 'D2' ...)
         """
-        return nodeDerivativeLabel in self._settings['displayNodeDerivativeLabels']
+        return nodeDerivativeLabel in self._displaySettings['displayNodeDerivativeLabels']
 
     def setDisplayNodeDerivativeLabels(self, nodeDerivativeLabel, show):
         """
         :param nodeDerivativeLabel: Label from self._nodeDerivativeLabels ('D1', 'D2' ...)
         :param show: True to show, False to not show.
         """
-        shown = nodeDerivativeLabel in self._settings['displayNodeDerivativeLabels']
+        shown = nodeDerivativeLabel in self._displaySettings['displayNodeDerivativeLabels']
         if show:
             if not shown:
                 # keep in same order as self._nodeDerivativeLabels
@@ -884,10 +876,10 @@ class ScaffoldCreatorModel(object):
                 for label in self._nodeDerivativeLabels:
                     if (label == nodeDerivativeLabel) or self.isDisplayNodeDerivativeLabels(label):
                         nodeDerivativeLabels.append(label)
-                self._settings['displayNodeDerivativeLabels'] = nodeDerivativeLabels
+                self._displaySettings['displayNodeDerivativeLabels'] = nodeDerivativeLabels
         else:
             if shown:
-                self._settings['displayNodeDerivativeLabels'].remove(nodeDerivativeLabel)
+                self._displaySettings['displayNodeDerivativeLabels'].remove(nodeDerivativeLabel)
         displayVersion = self.getDisplayNodeDerivativeVersion()
         # workaround for setting multiple visibility of d1/d2 applied to any derivatives starting with same text!
         with ChangeManager(self._scene):
@@ -896,21 +888,21 @@ class ScaffoldCreatorModel(object):
                     graphicsPartName = 'displayNodeDerivatives_' + tmpNodeDerivativeLabel
                     if displayVersion > 0:
                         graphicsPartName += '_v' + str(displayVersion)
-                    show = tmpNodeDerivativeLabel in self._settings['displayNodeDerivativeLabels']
+                    show = tmpNodeDerivativeLabel in self._displaySettings['displayNodeDerivativeLabels']
                     self._setMultipleGraphicsVisibility(graphicsPartName, show and bool(self.getDisplayNodeDerivatives()))
 
     def getDisplayNodeDerivativeVersion(self):
         """
         :return: 0 to show all versions, otherwise version number > 0.
         """
-        return self._settings['displayNodeDerivativeVersion']
+        return self._displaySettings['displayNodeDerivativeVersion']
 
     def setDisplayNodeDerivativeVersion(self, version):
         """
         :param version: Integer >= 0; 0 to show all versions, otherwise version number.
         """
         assert isinstance(version, int) and (version >= 0)
-        self._settings['displayNodeDerivativeVersion'] = version
+        self._displaySettings['displayNodeDerivativeVersion'] = version
         self.setDisplayNodeDerivatives(self.getDisplayNodeDerivatives())
 
     def isDisplayNodeNumbers(self):
@@ -932,18 +924,18 @@ class ScaffoldCreatorModel(object):
         self._setVisibility('displaySurfaces', show)
 
     def isDisplaySurfacesExterior(self):
-        return self._settings['displaySurfacesExterior']
+        return self._displaySettings['displaySurfacesExterior']
 
     def setDisplaySurfacesExterior(self, isExterior):
-        self._settings['displaySurfacesExterior'] = isExterior
+        self._displaySettings['displaySurfacesExterior'] = isExterior
         surfaces = self._region.getScene().findGraphicsByName('displaySurfaces')
         surfaces.setExterior(self.isDisplaySurfacesExterior() if (self.getMeshDimension() == 3) else False)
 
     def isDisplaySurfacesTranslucent(self):
-        return self._settings['displaySurfacesTranslucent']
+        return self._displaySettings['displaySurfacesTranslucent']
 
     def setDisplaySurfacesTranslucent(self, isTranslucent):
-        self._settings['displaySurfacesTranslucent'] = isTranslucent
+        self._displaySettings['displaySurfacesTranslucent'] = isTranslucent
         surfaces = self._region.getScene().findGraphicsByName('displaySurfaces')
         surfacesMaterial = self._materialmodule.findMaterialByName('trans_blue' if isTranslucent else 'solid_blue')
         surfaces.setMaterial(surfacesMaterial)
@@ -954,10 +946,10 @@ class ScaffoldCreatorModel(object):
         lines.setMaterial(linesMaterial)
 
     def isDisplaySurfacesWireframe(self):
-        return self._settings['displaySurfacesWireframe']
+        return self._displaySettings['displaySurfacesWireframe']
 
     def setDisplaySurfacesWireframe(self, isWireframe):
-        self._settings['displaySurfacesWireframe'] = isWireframe
+        self._displaySettings['displaySurfacesWireframe'] = isWireframe
         surfaces = self._region.getScene().findGraphicsByName('displaySurfaces')
         surfaces.setRenderPolygonMode(Graphics.RENDER_POLYGON_MODE_WIREFRAME if isWireframe else Graphics.RENDER_POLYGON_MODE_SHADED)
 
@@ -993,44 +985,82 @@ class ScaffoldCreatorModel(object):
         return self.getMesh().getDimension()
 
     def getSettings(self):
+        """
+        :return: Dict of settings used to create scaffold.
+        """
         return self._settings
+
+    @classmethod
+    def migrateLegacyCombinedSettings(cls, settings):
+        """
+        Modify settings to migrate legacy options in use before settings were split into creator and display.
+        :param settings: Legacy combined settings and display settings dict. Modified in place.
+        """
+        # rename display settings which did not start with 'display'
+        modelCoordinatesFieldName = settings.pop('modelCoordinatesField', None)
+        if modelCoordinatesFieldName:
+            settings['displayModelCoordinatesField'] = modelCoordinatesFieldName
+
+        # migrate boolean options which are now tri-state
+        key = 'displayNodeDerivatives'
+        value = settings.get(key)
+        if isinstance(value, bool):
+            settings[key] = 2 if value else 0
+
+        scaffoldPackage = settings.get('scaffoldPackage')
+        if not scaffoldPackage:
+            # migrate obsolete options to scaffoldPackage:
+            scaffoldType = Scaffolds.findScaffoldTypeByName(settings.pop('meshTypeName'))
+            scaffoldPackage = ScaffoldPackage(scaffoldType, {'scaffoldSettings': settings.pop('meshTypeOptions')})
+            settings['scaffoldPackage'] = scaffoldPackage
+
+        # migrate old scale text, now held in scaffoldPackage
+        scaleText = settings.pop('scale', None)
+        if scaleText:
+            scale = parseVector3(scaleText, delimiter="*", defaultValue=1.0)
+            scaffoldPackage.setScale(scale)
 
     def setSettings(self, settings):
         """
         Called on loading settings from file.
+        Caller is required to call generate() after calling this and setDisplaySettings().
+        :param settings: Creation settings to merge in / override defaults.
         """
-        scaffoldPackage = settings.get('scaffoldPackage')
-        if not scaffoldPackage:
-            # migrate obsolete options to scaffoldPackage:
-            scaffoldType = self._getScaffoldTypeByName(settings['meshTypeName'])
-            del settings['meshTypeName']
-            scaffoldSettings = settings['meshTypeOptions']
-            del settings['meshTypeOptions']
-            scaffoldPackage = ScaffoldPackage(scaffoldType, {'scaffoldSettings': scaffoldSettings})
-            settings['scaffoldPackage'] = scaffoldPackage
-        # migrate boolean options which are now tri-state
-        for name in ['displayNodeDerivatives']:
-            value = settings[name]
-            if type(value) == bool:
-                settings[name] = 2 if value else 0
         self._settings.update(settings)
         self._parseDeleteElementsRangesText(self._settings['deleteElementRanges'])
-        # migrate old scale text, now held in scaffoldPackage
-        oldScaleText = self._settings.get('scale')
-        if oldScaleText:
-            scaffoldPackage.setScale(parseVector3(oldScaleText, delimiter="*", defaultValue=1.0))
-            del self._settings['scale']  # remove so can't overwrite scale next time
-        self._scaffoldPackages = [scaffoldPackage]
+        self._scaffoldPackages = [settings['scaffoldPackage']]
         self._scaffoldPackageOptionNames = [None]
         self._checkCustomParameterSet()
-        self._generateMesh()
 
-    def _generateMesh(self):
+    def getDisplaySettings(self):
+        """
+        :return: Dict of settings used to control graphics shown for scaffold.
+        """
+        return self._displaySettings
+
+    def setDisplaySettings(self, displaySettings):
+        """
+        Called on loading display settings from file.
+        Client is required to call generate() after calling setSettings() and this.
+        :param displaySettings: Display settings to merge in / override defaults.
+        """
+        self._displaySettings.update(displaySettings)
+
+    def getMetadata(self):
+        """
+        :return: Dict of scaffold-specific metadata including annotations.
+        """
+        return self._scaffoldPackages[0].getMetadata()
+
+    def generate(self):
+        """
+        Generate the scaffold at the end of the list from the settings and build graphics for it.
+        """
         currentAnnotationGroupName = self._currentAnnotationGroup.getName() if self._currentAnnotationGroup else None
         scaffoldPackage = self._scaffoldPackages[-1]
         if self._region:
             self._parentRegion.removeChild(self._region)
-        self._resetModelCoordinatesField()
+        self._resetDisplayModelCoordinatesField()
         self._region = self._parentRegion.createChild(self._region_name)
         self._scene = self._region.getScene()
         fm = self._region.getFieldmodule()
@@ -1049,7 +1079,7 @@ class ScaffoldCreatorModel(object):
 
         # Zinc won't create cmiss_number and xi fields until endChange called
         # Hence must create graphics outside of ChangeManager lifetime:
-        self._discoverModelCoordinatesField()
+        self._discoverDisplayModelCoordinatesField()
         self._createGraphics()
         if self._sceneChangeCallback:
             self._sceneChangeCallback()
@@ -1106,7 +1136,7 @@ class ScaffoldCreatorModel(object):
         with ChangeManager(fm):
             mesh = self.getMesh()
             meshDimension = mesh.getDimension()
-            coordinates = self.getModelCoordinatesField()
+            coordinates = self.getDisplayModelCoordinatesField()
 
             elementDerivativeFields = []
             for d in range(meshDimension):
@@ -1187,8 +1217,10 @@ class ScaffoldCreatorModel(object):
             nodeNumbers.setVisibilityFlag(self.isDisplayNodeNumbers())
 
             nodeDerivativeFields = determine_node_field_derivatives(self._region, coordinates, True)
-            scene_create_node_derivative_graphics(scene, coordinates, nodeDerivativeFields, glyphWidth, self._nodeDerivativeLabels,
-                                                  self.getDisplayNodeDerivatives(), self._settings['displayNodeDerivativeLabels'], self.getDisplayNodeDerivativeVersion())
+            scene_create_node_derivative_graphics(
+                scene, coordinates, nodeDerivativeFields, glyphWidth, self._nodeDerivativeLabels,
+                self.getDisplayNodeDerivatives(), self._displaySettings['displayNodeDerivativeLabels'],
+                self.getDisplayNodeDerivativeVersion())
 
             elementNumbers = scene.createGraphicsPoints()
             elementNumbers.setFieldDomainType(Field.DOMAIN_TYPE_MESH_HIGHEST_DIMENSION)
@@ -1283,19 +1315,6 @@ class ScaffoldCreatorModel(object):
 
     def writeModel(self, file_name):
         self._region.writeFile(file_name)
-
-    @staticmethod
-    def getMetadataFilename(filename_stem):
-        return filename_stem + '-metadata.json'
-
-    def writeMetadata(self, filename_stem):
-        metadataFilename = self.getMetadataFilename(filename_stem)
-        metadataDict = {"id": "scaffold creator metadata", "version": "1.0.0"}
-        metadataDict["annotations"] = [{"id": annotationGroup.getId(), "name": annotationGroup.getName()}
-                                       for annotationGroup in self.getAnnotationGroups()]
-        metadataDict.update(self._scaffoldPackages[0].getMetadata())
-        with open(metadataFilename, 'w') as outstream:
-            json.dump(metadataDict, outstream, sort_keys=True, indent=4)
 
     def exportToVtk(self, filename_stem):
         base_name = os.path.basename(filename_stem)

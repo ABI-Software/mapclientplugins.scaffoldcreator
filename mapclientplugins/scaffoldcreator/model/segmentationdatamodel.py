@@ -1,5 +1,5 @@
 from cmlibs.utils.zinc.general import ChangeManager
-from cmlibs.zinc.field import Field
+from cmlibs.zinc.field import Field, FieldGroup
 from cmlibs.zinc.glyph import Glyph
 from cmlibs.zinc.result import RESULT_OK
 from cmlibs.zinc.spectrum import Spectrum, Spectrumcomponent
@@ -33,7 +33,7 @@ def get_field_coordinates_on_nodeset(fieldmodule, nodeset, name=None):
     return None
 
 
-class SegmentationDataModel():
+class SegmentationDataModel:
     """
     Manages segmentation data for building scaffold to.
     """
@@ -46,12 +46,14 @@ class SegmentationDataModel():
         self._region = None
         self._fieldmodule = None
         self._scene = None
-        self._settings = {
-            'displayDataContours' : True,
-            'displayDataPoints' : False,
-            'displayDataRadius' : False,
-            'displayDataMarkerPoints' : True,
-            'displayDataMarkerNames' : True
+        self._settings = {}
+        self._displaySettings = {
+            'displayDataGroup': None,
+            'displayDataLines': True,
+            'displayDataPoints': False,
+            'displayDataRadius': False,
+            'displayDataMarkerPoints': True,
+            'displayDataMarkerNames': True
             }
         scene = self._parent_region.getScene()
         spectrummodule = scene.getSpectrummodule()
@@ -77,6 +79,7 @@ class SegmentationDataModel():
             self._parent_region.removeChild(self._region)
         self._region = self._parent_region.createChild(self._region_name)
         result = self._region.readFile(self._data_filename)
+        self.getDisplayDataGroup()
         assert result == RESULT_OK
         self._fieldmodule = self._region.getFieldmodule()
         self._scene = self._region.getScene()
@@ -84,57 +87,103 @@ class SegmentationDataModel():
     def hasData(self):
         return (self._region is not None) and self._region.isValid()
 
+    def getRegion(self):
+        return self._region
+
+    @classmethod
+    def migrateLegacyCombinedSettings(cls, settings):
+        """
+        Modify settings to migrate legacy options in use before settings were split into creator and display.
+        :param settings: Legacy combined settings and display settings dict. Modified in place.
+        """
+        # rename contours which are now lines
+        displayDataContours = settings.pop('displayDataContours', None)
+        if displayDataContours is not None:
+            settings['displayDataLines'] = displayDataContours
+
     def getSettings(self):
         return self._settings
 
     def setSettings(self, settings):
-        '''
+        """
         Called on loading settings from file.
-        '''
+        Caller is required to call buildGraphics() after calling this and setDisplaySettings().
+        :param settings: Creation settings to merge in / override defaults.
+        """
         self._settings.update(settings)
-        self._generateGraphics()
+
+    def getDisplaySettings(self):
+        return self._displaySettings
+
+    def setDisplaySettings(self, displaySettings):
+        """
+        Called on loading display settings from file.
+        Client is required to call buildGraphics() after calling setSettings() and this.
+        :param displaySettings: Display settings to merge in / override defaults.
+        """
+        self._displaySettings.update(displaySettings)
 
     def _getVisibility(self, graphicsName):
-        return self._settings[graphicsName]
+        return self._displaySettings[graphicsName]
 
     def _setVisibility(self, graphicsName, show):
-        self._settings[graphicsName] = show
+        self._displaySettings[graphicsName] = show
         graphics = self._scene.findGraphicsByName(graphicsName)
         graphics.setVisibilityFlag(show)
 
-    def isDisplayDataContours(self):
-        return self._getVisibility("displayDataContours")
+    def getDisplayDataGroup(self):
+        """
+        :return: Zinc data group being displayed or None.
+        """
+        dataGroupName = self._displaySettings['displayDataGroup']
+        if dataGroupName:
+            return self._fieldmodule.findFieldByName(dataGroupName).castGroup()
+        return None
 
-    def setDisplayDataContours(self, show):
-        self._setVisibility("displayDataContours", show)
+    def setDisplayDataGroup(self, group):
+        """
+        Set group to restrict display of data points and lines to.
+        :param group: Zinc group or None.
+        """
+        self._displaySettings['displayDataGroup'] = group.getName() if (group and group.isValid()) else None
+        with ChangeManager(self._scene):
+            for graphicsName in ('displayDataPoints', 'displayDataLines'):
+                graphics = self._scene.findGraphicsByName(graphicsName)
+                result = graphics.setSubgroupField(group if group else FieldGroup())
+
+    def isDisplayDataLines(self):
+        return self._getVisibility('displayDataLines')
+
+    def setDisplayDataLines(self, show):
+        self._setVisibility('displayDataLines', show)
 
     def isDisplayDataRadius(self):
         return self._getVisibility("displayDataRadius")
 
     def setDisplayDataRadius(self, show):
-        if show != self._settings["displayDataRadius"]:
-            self._settings["displayDataRadius"] = show
-            self._generateGraphics()
+        if show != self._displaySettings["displayDataRadius"]:
+            self._displaySettings["displayDataRadius"] = show
+            self.buildGraphics()
 
     def isDisplayDataPoints(self):
-        return self._getVisibility("displayDataPoints")
+        return self._getVisibility('displayDataPoints')
 
     def setDisplayDataPoints(self, show):
-        self._setVisibility("displayDataPoints", show)
+        self._setVisibility('displayDataPoints', show)
 
     def isDisplayDataMarkerPoints(self):
-        return self._getVisibility("displayDataMarkerPoints")
+        return self._getVisibility('displayDataMarkerPoints')
 
     def setDisplayDataMarkerPoints(self, show):
-        self._setVisibility("displayDataMarkerPoints", show)
+        self._setVisibility('displayDataMarkerPoints', show)
 
     def isDisplayDataMarkerNames(self):
-        return self._getVisibility("displayDataMarkerNames")
+        return self._getVisibility('displayDataMarkerNames')
 
     def setDisplayDataMarkerNames(self, show):
-        self._setVisibility("displayDataMarkerNames", show)
+        self._setVisibility('displayDataMarkerNames', show)
 
-    def _generateGraphics(self):
+    def buildGraphics(self):
         if not self._scene:
             return
         with ChangeManager(self._scene):
@@ -153,6 +202,7 @@ class SegmentationDataModel():
                 markerDataCoordinates = get_field_coordinates_on_nodeset(self._fieldmodule, markerNodeset, "coordinates") if markerNodeset.isValid() else None
             else:
                 markerDataCoordinates = None
+            dataGroup = self.getDisplayDataGroup()
 
             # data points - nodes if any, otherwise datapoints
 
@@ -160,11 +210,13 @@ class SegmentationDataModel():
             points.setFieldDomainType(Field.DOMAIN_TYPE_NODES if (nodes.getSize() > 0) else Field.DOMAIN_TYPE_DATAPOINTS)
             if coordinates:
                 points.setCoordinateField(coordinates)
+            if dataGroup:
+                points.setSubgroupField(dataGroup)
             pointattr = points.getGraphicspointattributes()
             if self.isDisplayDataRadius() and radius.isValid():
                 pointattr.setGlyphShapeType(Glyph.SHAPE_TYPE_SPHERE)
-                pointattr.setBaseSize([ 0.0 ])
-                pointattr.setScaleFactors([ 2.0 ])
+                pointattr.setBaseSize([0.0])
+                pointattr.setScaleFactors([2.0])
                 pointattr.setOrientationScaleField(radius)
             else:
                 pointattr.setGlyphShapeType(Glyph.SHAPE_TYPE_POINT)
@@ -172,24 +224,26 @@ class SegmentationDataModel():
                 points.setMaterial(self._materialmodule.findMaterialByName("grey50"))
             points.setDataField(rgb)
             points.setSpectrum(self._rgbSpectrum)
-            points.setName("displayDataPoints")
+            points.setName('displayDataPoints')
             points.setVisibilityFlag(self.isDisplayDataPoints())
 
-            # data contours
+            # data lines
 
             lines = self._scene.createGraphicsLines()
             if coordinates:
                 lines.setCoordinateField(coordinates)
+            if dataGroup:
+                lines.setSubgroupField(dataGroup)
             if self.isDisplayDataRadius() and radius.isValid():
                 lineattr = lines.getGraphicslineattributes()
                 lineattr.setShapeType(lineattr.SHAPE_TYPE_CIRCLE_EXTRUSION)
-                lineattr.setBaseSize([ 0.0 ])
-                lineattr.setScaleFactors([ 2.0 ])
+                lineattr.setBaseSize([0.0])
+                lineattr.setScaleFactors([2.0])
                 lineattr.setOrientationScaleField(radius)
             lines.setDataField(rgb)
             lines.setSpectrum(self._rgbSpectrum)
-            lines.setName("displayDataContours")
-            lines.setVisibilityFlag(self.isDisplayDataContours())
+            lines.setName('displayDataLines')
+            lines.setVisibilityFlag(self.isDisplayDataLines())
 
             # data marker points, names
 
@@ -202,7 +256,7 @@ class SegmentationDataModel():
             pointattr.setGlyphShapeType(Glyph.SHAPE_TYPE_POINT)
             markerPoints.setRenderPointSize(2.0)
             markerPoints.setMaterial(self._materialmodule.findMaterialByName("yellow"))
-            markerPoints.setName("displayDataMarkerPoints")
+            markerPoints.setName('displayDataMarkerPoints')
             markerPoints.setVisibilityFlag(self.isDisplayDataMarkerPoints())
 
             markerNames = self._scene.createGraphicsPoints()
@@ -215,5 +269,5 @@ class SegmentationDataModel():
             pointattr.setLabelText(1, " ")
             pointattr.setLabelField(markerName)
             markerNames.setMaterial(self._materialmodule.findMaterialByName("yellow"))
-            markerNames.setName("displayDataMarkerNames")
+            markerNames.setName('displayDataMarkerNames')
             markerNames.setVisibilityFlag(self.isDisplayDataMarkerNames())

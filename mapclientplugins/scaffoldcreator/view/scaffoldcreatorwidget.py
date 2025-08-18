@@ -18,7 +18,7 @@ from cmlibs.widgets.helpers.widgetvisibility import setting_visibility
 from cmlibs.widgets.ui.ui_displaysettingswidget import Ui_DisplaySettings
 from cmlibs.widgets.ui.ui_buttonswidget import Ui_Buttons
 from cmlibs.widgets.utils import parse_vector, parse_int
-from cmlibs.utils.zinc.field import fieldIsManagedCoordinates
+from cmlibs.utils.zinc.field import field_is_managed_coordinates, field_is_managed_group
 from scaffoldmaker.scaffoldpackage import ScaffoldPackage
 
 
@@ -44,7 +44,6 @@ class ScaffoldCreatorWidget(QtWidgets.QMainWindow):
 
         self._setup_dock_widget()
         self._scaffold_model = model.getCreatorModel()
-        self._annotation_model = model.getMeshAnnotationModel()
         self._segmentation_data_model = model.getSegmentationDataModel()
         self._ui.sceneviewer_widget.setContext(model.getContext())
         self._ui.sceneviewer_widget.setGeneratorModel(model.getCreatorModel())
@@ -118,10 +117,12 @@ class ScaffoldCreatorWidget(QtWidgets.QMainWindow):
         self._refreshParameterSetNames()
 
     def _sceneChanged(self):
-        # new region for choosing coordinate field from
+        # new model region for choosing fields from
         self._display_settings_ui.displayModelCoordinates_fieldChooser.setRegion(self._scaffold_model.getRegion())
-        self._display_settings_ui.displayModelCoordinates_fieldChooser.setField(self._scaffold_model.getModelCoordinatesField())
-        self._annotation_tools_ui.markerMaterialCoordinatesField_fieldChooser.setRegion(self._scaffold_model.getRegion())
+        self._display_settings_ui.displayModelCoordinates_fieldChooser.setField(
+            self._scaffold_model.getDisplayModelCoordinatesField())
+        self._annotation_tools_ui.markerMaterialCoordinatesField_fieldChooser.setRegion(
+            self._scaffold_model.getRegion())
         self._refreshAnnotationGroups()
         self._refreshCurrentAnnotationGroupSettings()
         sceneviewer = self._ui.sceneviewer_widget.getSceneviewer()
@@ -159,15 +160,20 @@ class ScaffoldCreatorWidget(QtWidgets.QMainWindow):
         self._scaffold_settings_ui.scale_lineEdit.editingFinished.connect(self._scaleLineEditChanged)
         self._scaffold_settings_ui.translation_lineEdit.editingFinished.connect(self._translationLineEditChanged)
         self._scaffold_settings_ui.applyTransformation_pushButton.clicked.connect(self._applyTransformationButtonPressed)
+        self._display_settings_ui.displayDataGroup_fieldChooser.setNullObjectName('-')
+        self._display_settings_ui.displayDataGroup_fieldChooser.setRegion(self._segmentation_data_model.getRegion())
+        self._display_settings_ui.displayDataGroup_fieldChooser.setConditional(field_is_managed_group)
+        self._display_settings_ui.displayDataGroup_fieldChooser.currentIndexChanged.connect(
+            self._displayDataGroupChanged)
         self._display_settings_ui.displayDataPoints_checkBox.clicked.connect(self._displayDataPointsClicked)
-        self._display_settings_ui.displayDataContours_checkBox.clicked.connect(self._displayDataContoursClicked)
+        self._display_settings_ui.displayDataLines_checkBox.clicked.connect(self._displayDataLinesClicked)
         self._display_settings_ui.displayDataRadius_checkBox.clicked.connect(self._displayDataRadiusClicked)
         self._display_settings_ui.displayDataMarkerPoints_checkBox.clicked.connect(self._displayDataMarkerPointsClicked)
         self._display_settings_ui.displayDataMarkerNames_checkBox.clicked.connect(self._displayDataMarkerNamesClicked)
         self._display_settings_ui.displayMarkerPoints_checkBox.clicked.connect(self._displayMarkerPointsClicked)
         self._display_settings_ui.displayZeroJacobianContours_checkBox.clicked.connect(self._displayZeroJacobianContoursClicked)
         self._display_settings_ui.displayModelCoordinates_fieldChooser.setRegion(self._scaffold_model.getRegion())
-        self._display_settings_ui.displayModelCoordinates_fieldChooser.setConditional(fieldIsManagedCoordinates)
+        self._display_settings_ui.displayModelCoordinates_fieldChooser.setConditional(field_is_managed_coordinates)
         self._display_settings_ui.displayModelCoordinates_fieldChooser.currentIndexChanged.connect(
             self._displayModelCoordinatesFieldChanged)
         self._display_settings_ui.displayAxes_checkBox.clicked.connect(self._displayAxesClicked)
@@ -201,7 +207,7 @@ class ScaffoldCreatorWidget(QtWidgets.QMainWindow):
         self._annotation_tools_ui.annotationGroupOntId_lineEdit.editingFinished.connect(self._annotationGroupOntIdLineEditChanged)
         self._annotation_tools_ui.markerMaterialCoordinatesField_fieldChooser.setRegion(self._scaffold_model.getRegion())
         self._annotation_tools_ui.markerMaterialCoordinatesField_fieldChooser.setNullObjectName("-")
-        self._annotation_tools_ui.markerMaterialCoordinatesField_fieldChooser.setConditional(fieldIsManagedCoordinates)
+        self._annotation_tools_ui.markerMaterialCoordinatesField_fieldChooser.setConditional(field_is_managed_coordinates)
         self._annotation_tools_ui.markerMaterialCoordinatesField_fieldChooser.currentIndexChanged.connect(
             self._markerMaterialCoordinatesFieldChanged)
         self._annotation_tools_ui.markerMaterialCoordinates_lineEdit.editingFinished.connect(
@@ -488,7 +494,6 @@ class ScaffoldCreatorWidget(QtWidgets.QMainWindow):
     def _scaffoldTypeChanged(self, index):
         scaffoldTypeName = self._scaffold_settings_ui.meshType_comboBox.itemText(index)
         self._scaffold_model.setScaffoldTypeByName(scaffoldTypeName)
-        self._annotation_model.setScaffoldTypeByName(scaffoldTypeName)
         self._refreshParameterSetNames()
         self._refreshScaffoldOptions()
         self._refreshAnnotationGroups()
@@ -604,8 +609,10 @@ class ScaffoldCreatorWidget(QtWidgets.QMainWindow):
 
     def _refreshOptions(self):
         self._identifier_label.setText('Identifier:  ' + self._model.getIdentifier())
+        self._display_settings_ui.displayDataGroup_fieldChooser.setField(
+            self._segmentation_data_model.getDisplayDataGroup())
         self._display_settings_ui.displayDataPoints_checkBox.setChecked(self._segmentation_data_model.isDisplayDataPoints())
-        self._display_settings_ui.displayDataContours_checkBox.setChecked(self._segmentation_data_model.isDisplayDataContours())
+        self._display_settings_ui.displayDataLines_checkBox.setChecked(self._segmentation_data_model.isDisplayDataLines())
         self._display_settings_ui.displayDataRadius_checkBox.setChecked(self._segmentation_data_model.isDisplayDataRadius())
         self._display_settings_ui.displayDataMarkerPoints_checkBox.setChecked(self._segmentation_data_model.isDisplayDataMarkerPoints())
         self._display_settings_ui.displayDataMarkerNames_checkBox.setChecked(self._segmentation_data_model.isDisplayDataMarkerNames())
@@ -679,11 +686,23 @@ class ScaffoldCreatorWidget(QtWidgets.QMainWindow):
         self._scaffold_model.applyTransformation(self._display_settings_ui.displayModelCoordinates_fieldChooser.getField())
         self._transformationChanged()
 
+    def _displayDataGroupChanged(self, index):
+        """
+        Callback for change in model coordinates field chooser widget.
+        """
+        field = self._display_settings_ui.displayDataGroup_fieldChooser.getField()
+        group = None
+        if field:
+            group = field.castGroup()
+            if not group.isValid():
+                group = None
+        self._segmentation_data_model.setDisplayDataGroup(group)
+
     def _displayDataPointsClicked(self):
         self._segmentation_data_model.setDisplayDataPoints(self._display_settings_ui.displayDataPoints_checkBox.isChecked())
 
-    def _displayDataContoursClicked(self):
-        self._segmentation_data_model.setDisplayDataContours(self._display_settings_ui.displayDataContours_checkBox.isChecked())
+    def _displayDataLinesClicked(self):
+        self._segmentation_data_model.setDisplayDataLines(self._display_settings_ui.displayDataLines_checkBox.isChecked())
 
     def _displayDataRadiusClicked(self):
         self._segmentation_data_model.setDisplayDataRadius(self._display_settings_ui.displayDataRadius_checkBox.isChecked())
@@ -706,7 +725,7 @@ class ScaffoldCreatorWidget(QtWidgets.QMainWindow):
         """
         field = self._display_settings_ui.displayModelCoordinates_fieldChooser.getField()
         if field:
-            self._scaffold_model.setModelCoordinatesField(field)  # will re-create graphics
+            self._scaffold_model.setDisplayModelCoordinatesField(field)  # will re-create graphics
 
     def _displayAxesClicked(self):
         self._scaffold_model.setDisplayAxes(self._display_settings_ui.displayAxes_checkBox.isChecked())
@@ -729,7 +748,8 @@ class ScaffoldCreatorWidget(QtWidgets.QMainWindow):
 
     def _displayNodeDerivativesClicked(self):
         checkState = self._display_settings_ui.displayNodeDerivatives_checkBox.checkState()
-        triState = 0 if (checkState == QtCore.Qt.CheckState.Unchecked) else 1 if (checkState == QtCore.Qt.CheckState.PartiallyChecked) else 2
+        triState = (0 if (checkState == QtCore.Qt.CheckState.Unchecked) else
+                    1 if (checkState == QtCore.Qt.CheckState.PartiallyChecked) else 2)
         self._scaffold_model.setDisplayNodeDerivatives(triState)
 
     def _displayNodeDerivativeLabelsD1Clicked(self):

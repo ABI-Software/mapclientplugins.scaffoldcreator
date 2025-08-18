@@ -7,12 +7,11 @@ from cmlibs.zinc.context import Context
 from cmlibs.zinc.material import Material
 
 from mapclientplugins.scaffoldcreator.model.scaffoldcreatormodel import ScaffoldCreatorModel
-from mapclientplugins.scaffoldcreator.model.meshannotationmodel import MeshAnnotationModel
 from mapclientplugins.scaffoldcreator.model.segmentationdatamodel import SegmentationDataModel
 from scaffoldmaker.scaffolds import Scaffolds_decodeJSON, Scaffolds_JSONEncoder
 
 
-class MasterModel(object):
+class MasterModel:
 
     def __init__(self, location, identifier):
         self._location = location
@@ -28,13 +27,6 @@ class MasterModel(object):
         self._region = self._context.createRegion()
         self._creator_model = ScaffoldCreatorModel(self._context, self._region, self._materialmodule)
         self._segmentation_data_model = SegmentationDataModel(self._region, self._materialmodule)
-        self._annotation_model = MeshAnnotationModel()
-
-        self._settings = {
-            'segmentation_data_settings': self._segmentation_data_model.getSettings()
-        }
-        self._makeConnections()
-        # self._loadSettings()
 
     def printLog(self):
         logger = self._context.getLogger()
@@ -68,23 +60,21 @@ class MasterModel(object):
         glyphmodule = self._context.getGlyphmodule()
         glyphmodule.defineStandardGlyphs()
 
-    def _makeConnections(self):
-        pass
-
     def getIdentifier(self):
         return self._identifier
 
-    def getOutputModelFilename(self):
+    def getZincScaffoldFilename(self):
         return self._filenameStem + '.exf'
 
-    def getOutputJsonMetadataFilename(self):
-        return self._creator_model.getMetadataFilename(self._filenameStem)
+    def getJsonSettingsFilename(self):
+        return self._filenameStem + '-settings.json'
+
+    def getJsonDisplaySettingsFilename(self):
+        return self._filenameStem + '-display-settings.json'
 
     def getCreatorModel(self):
         return self._creator_model
 
-    def getMeshAnnotationModel(self):
-        return self._annotation_model
 
     def getSegmentationDataModel(self):
         return self._segmentation_data_model
@@ -99,57 +89,116 @@ class MasterModel(object):
         self._creator_model.registerSceneChangeCallback(sceneChangeCallback)
 
     def done(self):
+        # save settings first in case of issues with other outputs
         self._saveSettings()
         self._creator_model.done()
-        self._creator_model.writeModel(self.getOutputModelFilename())
-        self._creator_model.writeMetadata(self._filenameStem)
+        self._creator_model.writeModel(self.getZincScaffoldFilename())
         self._creator_model.exportToVtk(self._filenameStem)
+
+    SCAFFOLD_CREATOR_SETTINGS_ID = 'scaffold creator settings'
 
     def _getSettings(self):
         """
-        Ensures master model settings includes current settings for sub models.
-        :return: Master setting dict.
+        :return: Settings for scaffold, segmentation data and metadata, ready to write.
         """
-        settings = self._settings
-        settings['scaffold_settings'] = self._creator_model.getSettings()
-        settings['segmentation_data_settings'] = self._segmentation_data_model.getSettings()
-        return settings
+        self._creator_model.updateSettingsBeforeWrite()
+        return {
+            'id': self.SCAFFOLD_CREATOR_SETTINGS_ID,
+            'version': '1.0.0',
+            'scaffold_settings': self._creator_model.getSettings(),
+            'segmentation_data_settings': self._segmentation_data_model.getSettings(),
+            'metadata': self._creator_model.getMetadata()
+        }
+
+    SCAFFOLD_CREATOR_DISPLAY_SETTINGS_ID = 'scaffold creator display settings'
+
+    def _getDisplaySettings(self):
+        """
+        :return: Combined display settings for scaffold and segmentation data, ready to write.
+        """
+        return {
+            'id': self.SCAFFOLD_CREATOR_DISPLAY_SETTINGS_ID,
+            'version': '1.0.0',
+            'scaffold_settings': self._creator_model.getDisplaySettings(),
+            'segmentation_data_settings': self._segmentation_data_model.getDisplaySettings()
+        }
+
+    @classmethod
+    def migrateLegacyCombinedSettings(cls, settings):
+        """
+        Migrate from legacy combined creator and display settings to separate dicts.
+        A number of legacy options are also migrated by this function.
+        :param settings: Combined legacy settings read from file.
+        :return: settings dict, displaySettings dict
+        """
+        if 'generator_settings' in settings:
+            # migrate from generator_settings in version 0.3.2
+            settings = {
+                'scaffold_settings': settings['generator_settings'],
+                'segmentation_data_settings': settings.pop('segmentation_data_settings', {})
+            }
+        if 'scaffold_settings' not in settings:
+            # migrate from version 0.2.0 settings
+            settings = {
+                'scaffold_settings': settings,
+                'segmentation_data_settings': settings.pop('segmentation_data_settings', {})
+            }
+        ScaffoldCreatorModel.migrateLegacyCombinedSettings(settings['scaffold_settings'])
+        # separate display settings which were in the same file
+        scaffoldDisplaySettings = {}
+        removeKeys = []
+        creator_settings = settings['scaffold_settings']
+        for key, value in creator_settings.items():
+            if 'display' in key:
+                scaffoldDisplaySettings[key] = value
+                removeKeys.append(key)
+        for key in removeKeys:
+            creator_settings.pop(key)
+        # note: at the time, segmentation data only had display settings
+        SegmentationDataModel.migrateLegacyCombinedSettings(settings['segmentation_data_settings'])
+        displaySettings = {
+            'scaffold_settings': scaffoldDisplaySettings,
+            'segmentation_data_settings': settings['segmentation_data_settings']
+        }
+        settings['segmentation_data_settings'] = {}
+        return settings, displaySettings
 
     def loadSettings(self):
-        try:
-            settings = self._settings
-            with open(self.getSettingsFilename(), 'r') as f:
-                savedSettings = json.loads(f.read(), object_hook=Scaffolds_decodeJSON)
-                settings.update(savedSettings)
-            # migrate from generator_settings in version 0.3.2
-            if 'generator_settings' in settings:
-                settings = self._settings = {
-                    'scaffold_settings': settings['generator_settings'],
-                    'segmentation_data_settings': settings['segmentation_data_settings']
-                }
-            if 'scaffold_settings' not in settings:
-                # migrate from version 0.2.0 settings
-                segmentation_data_settings = settings.pop('segmentation_data_settings', {})
-                settings = self._settings = {
-                    'scaffold_settings': settings,
-                    'segmentation_data_settings': segmentation_data_settings
-                }
-        except:
-            # no settings saved yet, following gets defaults
-            settings = self._getSettings()
-        self._creator_model.setSettings(settings['scaffold_settings'])
-        self._segmentation_data_model.setSettings(settings['segmentation_data_settings'])
-        self._annotation_model.setScaffoldTypeByName(self._creator_model.getEditScaffoldTypeName())
-        self._getSettings()
+        displaySettings = {}  # may be set from legacy combined settings and display settings
+        settingsFilename = self.getJsonSettingsFilename()
+        hasSettingsFile = os.path.isfile(settingsFilename)
+        if hasSettingsFile:
+            with open(self.getJsonSettingsFilename(), 'r') as f:
+                settings = json.loads(f.read(), object_hook=Scaffolds_decodeJSON)
+            if 'version' in settings:
+                assert settings['id'] == self.SCAFFOLD_CREATOR_SETTINGS_ID
+            else:
+                settings, displaySettings = self.migrateLegacyCombinedSettings(settings)
+            self._creator_model.setSettings(settings['scaffold_settings'])
+            self._segmentation_data_model.setSettings(settings['segmentation_data_settings'])
+
+        displaySettingsFileName = self.getJsonDisplaySettingsFilename()
+        hasDisplaySettingsFile = os.path.isfile(displaySettingsFileName)
+        if hasDisplaySettingsFile or displaySettings:
+            assert not (displaySettings and hasDisplaySettingsFile)  # GRC temporary
+            if hasDisplaySettingsFile:
+                with open(displaySettingsFileName, "r") as f:
+                    displaySettings = json.loads(f.read())
+                assert displaySettings['id'] == self.SCAFFOLD_CREATOR_DISPLAY_SETTINGS_ID
+                assert 'version' in displaySettings
+            self._creator_model.setDisplaySettings(displaySettings['scaffold_settings'])
+            self._segmentation_data_model.setDisplaySettings(displaySettings['segmentation_data_settings'])
+
+        self._creator_model.generate()
+        self._segmentation_data_model.buildGraphics()
 
     def _saveSettings(self):
-        self._creator_model.updateSettingsBeforeWrite()
         settings = self._getSettings()
-        with open(self.getSettingsFilename(), 'w') as f:
+        with open(self.getJsonSettingsFilename(), 'w') as f:
             f.write(json.dumps(settings, cls=Scaffolds_JSONEncoder, sort_keys=True, indent=4))
+        displaySettings = self._getDisplaySettings()
+        with open(self.getJsonDisplaySettingsFilename(), "w") as f:
+            f.write(json.dumps(displaySettings, sort_keys=True, indent=4))
 
     def setSegmentationDataFile(self, data_filename):
         self._segmentation_data_model.setDataFilename(data_filename)
-
-    def getSettingsFilename(self):
-        return self._filenameStem + '-settings.json'

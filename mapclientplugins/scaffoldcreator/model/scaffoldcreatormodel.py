@@ -94,7 +94,7 @@ class ScaffoldCreatorModel:
 
     def __init__(self, context, parent_region, material_module):
         super(ScaffoldCreatorModel, self).__init__()
-        self._region_name = "generated_mesh"
+        self._region_name = "scaffold"
         self._context = context
         self._parentRegion = parent_region
         self._materialmodule = material_module
@@ -119,6 +119,7 @@ class ScaffoldCreatorModel:
             'deleteElementRanges': ''
         }
         # settings which control which graphics are displayed
+        self._displayThemeName = 'Dark'  # overridden by master model
         self._displaySettings = {
             'displayNodePoints': False,
             'displayNodeNumbers': False,
@@ -135,6 +136,7 @@ class ScaffoldCreatorModel:
             'displayElementNumbers': False,
             'displayElementAxes': False,
             'displayAxes': True,
+            'displayMarkerNames': False,
             'displayMarkerPoints': False,
             'displayZeroJacobianContours': False,
             'displayModelCoordinatesField': 'coordinates'
@@ -772,6 +774,12 @@ class ScaffoldCreatorModel:
         graphics = self._region.getScene().findGraphicsByName(graphicsName)
         graphics.setVisibilityFlag(show)
 
+    def isDisplayMarkerNames(self):
+        return self._getVisibility('displayMarkerNames')
+
+    def setDisplayMarkerNames(self, show):
+        self._setVisibility('displayMarkerNames', show)
+
     def isDisplayMarkerPoints(self):
         return self._getVisibility('displayMarkerPoints')
 
@@ -1007,6 +1015,10 @@ class ScaffoldCreatorModel:
         if isinstance(value, bool):
             settings[key] = 2 if value else 0
 
+        # show marker names which were previously tied to marker points
+        if settings.get('displayMarkerPoints'):
+            settings['displayMarkerNames'] = True
+
         scaffoldPackage = settings.get('scaffoldPackage')
         if not scaffoldPackage:
             # migrate obsolete options to scaffoldPackage:
@@ -1131,6 +1143,31 @@ class ScaffoldCreatorModel:
             pointattr.setBaseSize([axesScale])
             pointattr.setLabelText(1, '  {:2g}'.format(axesScale))
 
+    def _applyDisplayTheme(self):
+        if not self._scene:
+            return
+        isDark = self._displayThemeName == 'Dark'
+        with ChangeManager(self._scene):
+            points = self._scene.findGraphicsByName('displayPoints')
+            pointattr = points.getGraphicspointattributes()
+            if pointattr.getGlyphShapeType() == Glyph.SHAPE_TYPE_POINT:
+                points.setMaterial(self._materialmodule.findMaterialByName('default' if isDark else 'black'))
+            lines = self._scene.findGraphicsByName('displayLines')
+            lineattr = lines.getGraphicslineattributes()
+            if lineattr.getShapeType() == lineattr.SHAPE_TYPE_LINE:
+                lines.setMaterial(self._materialmodule.findMaterialByName('default' if isDark else 'black'))
+            elementNumbers = self._scene.findGraphicsByName('displayElementNumbers')
+            elementNumbers.setMaterial(self._materialmodule.findMaterialByName('cyan' if isDark else 'blue'))
+            elementAxes = self._scene.findGraphicsByName('displayElementAxes')
+            elementAxes.setMaterial(self._materialmodule.findMaterialByName('yellow' if isDark else 'brown'))
+            for graphicsName in ('displayMarkerPoints', 'displayMarkerNames'):
+                graphics = self._scene.findGraphicsByName(graphicsName)
+                graphics.setMaterial(self._materialmodule.findMaterialByName('default' if isDark else 'black'))
+
+    def setDisplayTheme(self, displayThemeName):
+        self._displayThemeName = displayThemeName
+        self._applyDisplayTheme()
+
     def _createGraphics(self):
         fm = self._region.getFieldmodule()
         with ChangeManager(fm):
@@ -1202,7 +1239,6 @@ class ScaffoldCreatorModel:
                 pointattr.setOrientationScaleField(radius)
             else:
                 pointattr.setBaseSize([glyphWidth])
-            nodePoints.setMaterial(self._materialmodule.findMaterialByName('white'))
             nodePoints.setName('displayNodePoints')
             nodePoints.setVisibilityFlag(self.isDisplayNodePoints())
 
@@ -1268,19 +1304,27 @@ class ScaffoldCreatorModel:
             elementAxes.setName('displayElementAxes')
             elementAxes.setVisibilityFlag(self.isDisplayElementAxes())
 
-            # marker points
+            # marker points, names
+
             markerPoints = scene.createGraphicsPoints()
             markerPoints.setFieldDomainType(Field.DOMAIN_TYPE_NODES)
             markerPoints.setSubgroupField(markerGroup)
             markerPoints.setCoordinateField(markerHostCoordinates)
             pointattr = markerPoints.getGraphicspointattributes()
-            pointattr.setLabelText(1, '  ')
-            pointattr.setLabelField(markerName)
             pointattr.setGlyphShapeType(Glyph.SHAPE_TYPE_CROSS)
             pointattr.setBaseSize(2 * glyphWidth)
-            markerPoints.setMaterial(self._materialmodule.findMaterialByName('white'))
             markerPoints.setName('displayMarkerPoints')
             markerPoints.setVisibilityFlag(self.isDisplayMarkerPoints())
+
+            markerNames = scene.createGraphicsPoints()
+            markerNames.setFieldDomainType(Field.DOMAIN_TYPE_NODES)
+            markerNames.setSubgroupField(markerGroup)
+            markerNames.setCoordinateField(markerHostCoordinates)
+            pointattr = markerNames.getGraphicspointattributes()
+            pointattr.setLabelText(1, '  ')
+            pointattr.setLabelField(markerName)
+            markerNames.setName('displayMarkerNames')
+            markerNames.setVisibilityFlag(self.isDisplayMarkerNames())
 
             # zero Jacobian contours
             if jacobian:
@@ -1291,6 +1335,8 @@ class ScaffoldCreatorModel:
                 contours.setMaterial(self._materialmodule.findMaterialByName('magenta'))
                 contours.setName('displayZeroJacobianContours')
                 contours.setVisibilityFlag(self.isDisplayZeroJacobianContours())
+
+            self._applyDisplayTheme()
 
         logger = self._context.getLogger()
         loggerMessageCount = logger.getNumberOfMessages()

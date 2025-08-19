@@ -47,6 +47,7 @@ class SegmentationDataModel:
         self._fieldmodule = None
         self._scene = None
         self._settings = {}
+        self._displayThemeName = 'Dark'  # overridden by master model
         self._displaySettings = {
             'displayDataGroup': None,
             'displayDataLines': True,
@@ -183,6 +184,25 @@ class SegmentationDataModel:
     def setDisplayDataMarkerNames(self, show):
         self._setVisibility('displayDataMarkerNames', show)
 
+    def _applyDisplayTheme(self):
+        if not self._scene:
+            return
+        isDark = self._displayThemeName == 'Dark'
+        with ChangeManager(self._scene):
+            points = self._scene.findGraphicsByName('displayDataPoints')
+            pointattr = points.getGraphicspointattributes()
+            if pointattr.getGlyphShapeType() == Glyph.SHAPE_TYPE_POINT:
+                points.setMaterial(self._materialmodule.findMaterialByName('default' if isDark else 'black'))
+            lines = self._scene.findGraphicsByName('displayDataLines')
+            lines.setMaterial(self._materialmodule.findMaterialByName('default' if isDark else 'black'))
+            for graphicsName in ('displayDataMarkerPoints', 'displayDataMarkerNames'):
+                graphics = self._scene.findGraphicsByName(graphicsName)
+                graphics.setMaterial(self._materialmodule.findMaterialByName('yellow' if isDark else 'brown'))
+
+    def setDisplayTheme(self, displayThemeName):
+        self._displayThemeName = displayThemeName
+        self._applyDisplayTheme()
+
     def buildGraphics(self):
         if not self._scene:
             return
@@ -271,3 +291,5 @@ class SegmentationDataModel:
             markerNames.setMaterial(self._materialmodule.findMaterialByName("yellow"))
             markerNames.setName('displayDataMarkerNames')
             markerNames.setVisibilityFlag(self.isDisplayDataMarkerNames())
+
+            self._applyDisplayTheme()

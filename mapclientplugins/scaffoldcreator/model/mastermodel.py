@@ -1,14 +1,14 @@
-import os
-import json
-
-from PySide6 import QtCore
-
+from cmlibs.utils.zinc.general import ChangeManager
 from cmlibs.zinc.context import Context
+from cmlibs.zinc.glyph import Glyph
+from cmlibs.zinc.graphics import Graphics, Graphicslineattributes
 from cmlibs.zinc.material import Material
-
 from mapclientplugins.scaffoldcreator.model.scaffoldcreatormodel import ScaffoldCreatorModel
 from mapclientplugins.scaffoldcreator.model.segmentationdatamodel import SegmentationDataModel
 from scaffoldmaker.scaffolds import Scaffolds_decodeJSON, Scaffolds_JSONEncoder
+import os
+import json
+from PySide6 import QtCore
 
 
 class MasterModel:
@@ -27,6 +27,10 @@ class MasterModel:
         self._region = self._context.createRegion()
         self._creator_model = ScaffoldCreatorModel(self._context, self._region, self._materialmodule)
         self._segmentation_data_model = SegmentationDataModel(self._region, self._materialmodule)
+        self._settings = {}
+        self._displaySettings = {
+            'displayTheme': 'Dark'
+        }
 
     def printLog(self):
         logger = self._context.getLogger()
@@ -72,9 +76,28 @@ class MasterModel:
     def getJsonDisplaySettingsFilename(self):
         return self._filenameStem + '-display-settings.json'
 
+    def getDisplayTheme(self):
+        return self._displaySettings['displayTheme']
+
+    def _applyDisplayTheme(self):
+        """
+        Update sub-model graphics materials for the current theme.
+        """
+        displayThemeName = self._displaySettings['displayTheme']
+        # defaultColourRGB = [0.0, 0.0, 0.0] if (themeName == 'Light') else [1.0, 1.0, 1.0]
+        # defaultMaterial = self._materialmodule.getDefaultMaterial()
+        # defaultMaterial.setAttributeReal3(Material.ATTRIBUTE_AMBIENT, defaultColourRGB)
+        # defaultMaterial.setAttributeReal3(Material.ATTRIBUTE_DIFFUSE, defaultColourRGB)
+        self._creator_model.setDisplayTheme(displayThemeName)
+        self._segmentation_data_model.setDisplayTheme(displayThemeName)
+
+    def setDisplayTheme(self, displayThemeName):
+        assert displayThemeName in ('Dark', 'Light')
+        self._displaySettings['displayTheme'] = displayThemeName
+        self._applyDisplayTheme()
+
     def getCreatorModel(self):
         return self._creator_model
-
 
     def getSegmentationDataModel(self):
         return self._segmentation_data_model
@@ -105,6 +128,7 @@ class MasterModel:
         return {
             'id': self.SCAFFOLD_CREATOR_SETTINGS_ID,
             'version': '1.0.0',
+            'general_settings': self._settings,
             'scaffold_settings': self._creator_model.getSettings(),
             'segmentation_data_settings': self._segmentation_data_model.getSettings(),
             'metadata': self._creator_model.getMetadata()
@@ -119,6 +143,7 @@ class MasterModel:
         return {
             'id': self.SCAFFOLD_CREATOR_DISPLAY_SETTINGS_ID,
             'version': '1.0.0',
+            'general_settings': self._displaySettings,
             'scaffold_settings': self._creator_model.getDisplaySettings(),
             'segmentation_data_settings': self._segmentation_data_model.getDisplaySettings()
         }
@@ -160,7 +185,10 @@ class MasterModel:
             'scaffold_settings': scaffoldDisplaySettings,
             'segmentation_data_settings': settings['segmentation_data_settings']
         }
+        # add settings for future/new use:
         settings['segmentation_data_settings'] = {}
+        settings['general_settings'] = {}
+        displaySettings['general_settings'] = {}
         return settings, displaySettings
 
     def loadSettings(self):
@@ -174,23 +202,25 @@ class MasterModel:
                 assert settings['id'] == self.SCAFFOLD_CREATOR_SETTINGS_ID
             else:
                 settings, displaySettings = self.migrateLegacyCombinedSettings(settings)
+            self._settings.update(settings.get('general_settings', {}))
             self._creator_model.setSettings(settings['scaffold_settings'])
             self._segmentation_data_model.setSettings(settings['segmentation_data_settings'])
 
         displaySettingsFileName = self.getJsonDisplaySettingsFilename()
         hasDisplaySettingsFile = os.path.isfile(displaySettingsFileName)
         if hasDisplaySettingsFile or displaySettings:
-            assert not (displaySettings and hasDisplaySettingsFile)  # GRC temporary
             if hasDisplaySettingsFile:
                 with open(displaySettingsFileName, "r") as f:
                     displaySettings = json.loads(f.read())
                 assert displaySettings['id'] == self.SCAFFOLD_CREATOR_DISPLAY_SETTINGS_ID
                 assert 'version' in displaySettings
+            self._displaySettings.update(displaySettings.get('general_settings', {}))
             self._creator_model.setDisplaySettings(displaySettings['scaffold_settings'])
             self._segmentation_data_model.setDisplaySettings(displaySettings['segmentation_data_settings'])
 
         self._creator_model.generate()
         self._segmentation_data_model.buildGraphics()
+        self._applyDisplayTheme()
 
     def _saveSettings(self):
         settings = self._getSettings()

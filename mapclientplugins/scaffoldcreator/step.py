@@ -42,8 +42,7 @@ class ScaffoldCreator(WorkflowStepMountPoint):
                        'http://physiomeproject.org/workflow/1.0/rdf-schema#file_location'),
                       ('http://physiomeproject.org/workflow/1.0/rdf-schema#port',
                        'http://physiomeproject.org/workflow/1.0/rdf-schema#provides',
-                       'http://physiomeproject.org/workflow/1.0/rdf-schema#json_file_location')
-                      ])
+                       'http://physiomeproject.org/workflow/1.0/rdf-schema#json_file_location')])
         # Port data:
         self._port0_outputZincScaffoldFilename = None  # output exf_file_location
         self._port1_inputZincDataFilename = None  # input exf_file_location
@@ -99,7 +98,7 @@ class ScaffoldCreator(WorkflowStepMountPoint):
         """
         if index == 0:
             return self._port0_outputZincScaffoldFilename  # exf_file_location
-        elif index == 2:
+        if index == 2:
             return self._port2_outputJsonSettingsFilename  # json_file_location
         return None
 

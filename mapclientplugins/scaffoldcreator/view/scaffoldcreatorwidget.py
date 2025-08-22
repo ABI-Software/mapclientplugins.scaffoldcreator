@@ -18,7 +18,7 @@ from cmlibs.widgets.helpers.widgetvisibility import setting_visibility
 from cmlibs.widgets.ui.ui_displaysettingswidget import Ui_DisplaySettings
 from cmlibs.widgets.ui.ui_buttonswidget import Ui_Buttons
 from cmlibs.widgets.utils import parse_vector, parse_int
-from cmlibs.utils.zinc.field import fieldIsManagedCoordinates
+from cmlibs.utils.zinc.field import field_is_managed_coordinates, field_is_managed_group
 from scaffoldmaker.scaffoldpackage import ScaffoldPackage
 
 
@@ -39,12 +39,9 @@ class ScaffoldCreatorWidget(QtWidgets.QMainWindow):
         super(ScaffoldCreatorWidget, self).__init__(parent)
         self._ui = Ui_ScaffoldCreatorWidget()
         self._ui.setupUi(self)
-
         self._model = model
-
         self._setup_dock_widget()
         self._scaffold_model = model.getCreatorModel()
-        self._annotation_model = model.getMeshAnnotationModel()
         self._segmentation_data_model = model.getSegmentationDataModel()
         self._ui.sceneviewer_widget.setContext(model.getContext())
         self._ui.sceneviewer_widget.setGeneratorModel(model.getCreatorModel())
@@ -102,6 +99,7 @@ class ScaffoldCreatorWidget(QtWidgets.QMainWindow):
         sceneviewer = self._ui.sceneviewer_widget.getSceneviewer()
         if sceneviewer is not None:
             self._model.loadSettings()
+            self._setDisplayThemeBackground()
             self._refreshOptions()
             scene = self._model.getScene()
             self._ui.sceneviewer_widget.setScene(scene)
@@ -111,6 +109,13 @@ class ScaffoldCreatorWidget(QtWidgets.QMainWindow):
             self._autoPerturbLines()
             self._viewAllButtonClicked()
 
+    def _setDisplayThemeBackground(self):
+        sceneviewer = self._ui.sceneviewer_widget.getSceneviewer()
+        if sceneviewer is not None:
+            themeName = self._model.getDisplayTheme()
+            backgroundColourRGB = [1.0, 1.0, 1.0] if (themeName == 'Light') else [0.0, 0.0, 0.0]
+            sceneviewer.setBackgroundColourRGB(backgroundColourRGB)
+
     def _customParametersChange(self):
         """
         Callback when scaffold options or mesh edits are made, so custom parameter set now in use.
@@ -118,10 +123,12 @@ class ScaffoldCreatorWidget(QtWidgets.QMainWindow):
         self._refreshParameterSetNames()
 
     def _sceneChanged(self):
-        # new region for choosing coordinate field from
+        # new model region for choosing fields from
         self._display_settings_ui.displayModelCoordinates_fieldChooser.setRegion(self._scaffold_model.getRegion())
-        self._display_settings_ui.displayModelCoordinates_fieldChooser.setField(self._scaffold_model.getModelCoordinatesField())
-        self._annotation_tools_ui.markerMaterialCoordinatesField_fieldChooser.setRegion(self._scaffold_model.getRegion())
+        self._display_settings_ui.displayModelCoordinates_fieldChooser.setField(
+            self._scaffold_model.getDisplayModelCoordinatesField())
+        self._annotation_tools_ui.markerMaterialCoordinatesField_fieldChooser.setRegion(
+            self._scaffold_model.getRegion())
         self._refreshAnnotationGroups()
         self._refreshCurrentAnnotationGroupSettings()
         sceneviewer = self._ui.sceneviewer_widget.getSceneviewer()
@@ -159,15 +166,21 @@ class ScaffoldCreatorWidget(QtWidgets.QMainWindow):
         self._scaffold_settings_ui.scale_lineEdit.editingFinished.connect(self._scaleLineEditChanged)
         self._scaffold_settings_ui.translation_lineEdit.editingFinished.connect(self._translationLineEditChanged)
         self._scaffold_settings_ui.applyTransformation_pushButton.clicked.connect(self._applyTransformationButtonPressed)
+        self._display_settings_ui.displayDataGroup_fieldChooser.setNullObjectName('-')
+        self._display_settings_ui.displayDataGroup_fieldChooser.setRegion(self._segmentation_data_model.getRegion())
+        self._display_settings_ui.displayDataGroup_fieldChooser.setConditional(field_is_managed_group)
+        self._display_settings_ui.displayDataGroup_fieldChooser.currentIndexChanged.connect(
+            self._displayDataGroupChanged)
         self._display_settings_ui.displayDataPoints_checkBox.clicked.connect(self._displayDataPointsClicked)
-        self._display_settings_ui.displayDataContours_checkBox.clicked.connect(self._displayDataContoursClicked)
+        self._display_settings_ui.displayDataLines_checkBox.clicked.connect(self._displayDataLinesClicked)
         self._display_settings_ui.displayDataRadius_checkBox.clicked.connect(self._displayDataRadiusClicked)
         self._display_settings_ui.displayDataMarkerPoints_checkBox.clicked.connect(self._displayDataMarkerPointsClicked)
         self._display_settings_ui.displayDataMarkerNames_checkBox.clicked.connect(self._displayDataMarkerNamesClicked)
         self._display_settings_ui.displayMarkerPoints_checkBox.clicked.connect(self._displayMarkerPointsClicked)
+        self._display_settings_ui.displayMarkerNames_checkBox.clicked.connect(self._displayMarkerNamesClicked)
         self._display_settings_ui.displayZeroJacobianContours_checkBox.clicked.connect(self._displayZeroJacobianContoursClicked)
         self._display_settings_ui.displayModelCoordinates_fieldChooser.setRegion(self._scaffold_model.getRegion())
-        self._display_settings_ui.displayModelCoordinates_fieldChooser.setConditional(fieldIsManagedCoordinates)
+        self._display_settings_ui.displayModelCoordinates_fieldChooser.setConditional(field_is_managed_coordinates)
         self._display_settings_ui.displayModelCoordinates_fieldChooser.currentIndexChanged.connect(
             self._displayModelCoordinatesFieldChanged)
         self._display_settings_ui.displayAxes_checkBox.clicked.connect(self._displayAxesClicked)
@@ -192,6 +205,7 @@ class ScaffoldCreatorWidget(QtWidgets.QMainWindow):
         self._display_settings_ui.displaySurfacesExterior_checkBox.clicked.connect(self._displaySurfacesExteriorClicked)
         self._display_settings_ui.displaySurfacesTranslucent_checkBox.clicked.connect(self._displaySurfacesTranslucentClicked)
         self._display_settings_ui.displaySurfacesWireframe_checkBox.clicked.connect(self._displaySurfacesWireframeClicked)
+        self._display_settings_ui.displayTheme_comboBox.currentIndexChanged.connect(self._displayThemeChanged)
         self._annotation_tools_ui.annotationGroup_comboBox.currentIndexChanged.connect(self._annotationGroupChanged)
         self._annotation_tools_ui.annotationGroupNew_pushButton.clicked.connect(self._annotationGroupNewButtonClicked)
         self._annotation_tools_ui.annotationGroupNewMarker_pushButton.clicked.connect(self._annotationGroupNewMarkerButtonClicked)
@@ -201,7 +215,7 @@ class ScaffoldCreatorWidget(QtWidgets.QMainWindow):
         self._annotation_tools_ui.annotationGroupOntId_lineEdit.editingFinished.connect(self._annotationGroupOntIdLineEditChanged)
         self._annotation_tools_ui.markerMaterialCoordinatesField_fieldChooser.setRegion(self._scaffold_model.getRegion())
         self._annotation_tools_ui.markerMaterialCoordinatesField_fieldChooser.setNullObjectName("-")
-        self._annotation_tools_ui.markerMaterialCoordinatesField_fieldChooser.setConditional(fieldIsManagedCoordinates)
+        self._annotation_tools_ui.markerMaterialCoordinatesField_fieldChooser.setConditional(field_is_managed_coordinates)
         self._annotation_tools_ui.markerMaterialCoordinatesField_fieldChooser.currentIndexChanged.connect(
             self._markerMaterialCoordinatesFieldChanged)
         self._annotation_tools_ui.markerMaterialCoordinates_lineEdit.editingFinished.connect(
@@ -488,7 +502,6 @@ class ScaffoldCreatorWidget(QtWidgets.QMainWindow):
     def _scaffoldTypeChanged(self, index):
         scaffoldTypeName = self._scaffold_settings_ui.meshType_comboBox.itemText(index)
         self._scaffold_model.setScaffoldTypeByName(scaffoldTypeName)
-        self._annotation_model.setScaffoldTypeByName(scaffoldTypeName)
         self._refreshParameterSetNames()
         self._refreshScaffoldOptions()
         self._refreshAnnotationGroups()
@@ -604,13 +617,17 @@ class ScaffoldCreatorWidget(QtWidgets.QMainWindow):
 
     def _refreshOptions(self):
         self._identifier_label.setText('Identifier:  ' + self._model.getIdentifier())
+        self._display_settings_ui.displayDataGroup_fieldChooser.setField(
+            self._segmentation_data_model.getDisplayDataGroup())
         self._display_settings_ui.displayDataPoints_checkBox.setChecked(self._segmentation_data_model.isDisplayDataPoints())
-        self._display_settings_ui.displayDataContours_checkBox.setChecked(self._segmentation_data_model.isDisplayDataContours())
+        self._display_settings_ui.displayDataLines_checkBox.setChecked(self._segmentation_data_model.isDisplayDataLines())
         self._display_settings_ui.displayDataRadius_checkBox.setChecked(self._segmentation_data_model.isDisplayDataRadius())
         self._display_settings_ui.displayDataMarkerPoints_checkBox.setChecked(self._segmentation_data_model.isDisplayDataMarkerPoints())
         self._display_settings_ui.displayDataMarkerNames_checkBox.setChecked(self._segmentation_data_model.isDisplayDataMarkerNames())
         self._display_settings_ui.displayData_frame.setVisible(self._segmentation_data_model.hasData())
         self._display_settings_ui.displayMarkerPoints_checkBox.setChecked(self._scaffold_model.isDisplayMarkerPoints())
+        self._display_settings_ui.displayMarkerNames_checkBox.setChecked(self._scaffold_model.isDisplayMarkerNames())
+
         self._display_settings_ui.displayZeroJacobianContours_checkBox.setChecked(self._scaffold_model.isDisplayZeroJacobianContours())
         self._display_settings_ui.displayAxes_checkBox.setChecked(self._scaffold_model.isDisplayAxes())
         self._display_settings_ui.displayElementNumbers_checkBox.setChecked(self._scaffold_model.isDisplayElementNumbers())
@@ -644,6 +661,10 @@ class ScaffoldCreatorWidget(QtWidgets.QMainWindow):
         self._display_settings_ui.displaySurfacesExterior_checkBox.setChecked(self._scaffold_model.isDisplaySurfacesExterior())
         self._display_settings_ui.displaySurfacesTranslucent_checkBox.setChecked(self._scaffold_model.isDisplaySurfacesTranslucent())
         self._display_settings_ui.displaySurfacesWireframe_checkBox.setChecked(self._scaffold_model.isDisplaySurfacesWireframe())
+        index = self._display_settings_ui.displayTheme_comboBox.findText(self._model.getDisplayTheme())
+        self._display_settings_ui.displayTheme_comboBox.blockSignals(True)
+        self._display_settings_ui.displayTheme_comboBox.setCurrentIndex(index)
+        self._display_settings_ui.displayTheme_comboBox.blockSignals(False)
         index = self._scaffold_settings_ui.meshType_comboBox.findText(self._scaffold_model.getEditScaffoldTypeName())
         self._scaffold_settings_ui.meshType_comboBox.blockSignals(True)
         self._scaffold_settings_ui.meshType_comboBox.setCurrentIndex(index)
@@ -679,11 +700,23 @@ class ScaffoldCreatorWidget(QtWidgets.QMainWindow):
         self._scaffold_model.applyTransformation(self._display_settings_ui.displayModelCoordinates_fieldChooser.getField())
         self._transformationChanged()
 
+    def _displayDataGroupChanged(self, index):
+        """
+        Callback for change in model coordinates field chooser widget.
+        """
+        field = self._display_settings_ui.displayDataGroup_fieldChooser.getField()
+        group = None
+        if field:
+            group = field.castGroup()
+            if not group.isValid():
+                group = None
+        self._segmentation_data_model.setDisplayDataGroup(group)
+
     def _displayDataPointsClicked(self):
         self._segmentation_data_model.setDisplayDataPoints(self._display_settings_ui.displayDataPoints_checkBox.isChecked())
 
-    def _displayDataContoursClicked(self):
-        self._segmentation_data_model.setDisplayDataContours(self._display_settings_ui.displayDataContours_checkBox.isChecked())
+    def _displayDataLinesClicked(self):
+        self._segmentation_data_model.setDisplayDataLines(self._display_settings_ui.displayDataLines_checkBox.isChecked())
 
     def _displayDataRadiusClicked(self):
         self._segmentation_data_model.setDisplayDataRadius(self._display_settings_ui.displayDataRadius_checkBox.isChecked())
@@ -697,6 +730,9 @@ class ScaffoldCreatorWidget(QtWidgets.QMainWindow):
     def _displayMarkerPointsClicked(self):
         self._scaffold_model.setDisplayMarkerPoints(self._display_settings_ui.displayMarkerPoints_checkBox.isChecked())
 
+    def _displayMarkerNamesClicked(self):
+        self._scaffold_model.setDisplayMarkerNames(self._display_settings_ui.displayMarkerNames_checkBox.isChecked())
+
     def _displayZeroJacobianContoursClicked(self):
         self._scaffold_model.setDisplayZeroJacobianContours(self._display_settings_ui.displayZeroJacobianContours_checkBox.isChecked())
 
@@ -706,7 +742,7 @@ class ScaffoldCreatorWidget(QtWidgets.QMainWindow):
         """
         field = self._display_settings_ui.displayModelCoordinates_fieldChooser.getField()
         if field:
-            self._scaffold_model.setModelCoordinatesField(field)  # will re-create graphics
+            self._scaffold_model.setDisplayModelCoordinatesField(field)  # will re-create graphics
 
     def _displayAxesClicked(self):
         self._scaffold_model.setDisplayAxes(self._display_settings_ui.displayAxes_checkBox.isChecked())
@@ -729,7 +765,8 @@ class ScaffoldCreatorWidget(QtWidgets.QMainWindow):
 
     def _displayNodeDerivativesClicked(self):
         checkState = self._display_settings_ui.displayNodeDerivatives_checkBox.checkState()
-        triState = 0 if (checkState == QtCore.Qt.CheckState.Unchecked) else 1 if (checkState == QtCore.Qt.CheckState.PartiallyChecked) else 2
+        triState = (0 if (checkState == QtCore.Qt.CheckState.Unchecked) else
+                    1 if (checkState == QtCore.Qt.CheckState.PartiallyChecked) else 2)
         self._scaffold_model.setDisplayNodeDerivatives(triState)
 
     def _displayNodeDerivativeLabelsD1Clicked(self):
@@ -782,3 +819,8 @@ class ScaffoldCreatorWidget(QtWidgets.QMainWindow):
 
     def _displaySurfacesWireframeClicked(self):
         self._scaffold_model.setDisplaySurfacesWireframe(self._display_settings_ui.displaySurfacesWireframe_checkBox.isChecked())
+
+    def _displayThemeChanged(self, index):
+        themeName = self._display_settings_ui.displayTheme_comboBox.itemText(index)
+        self._model.setDisplayTheme(themeName)
+        self._setDisplayThemeBackground()

@@ -3,7 +3,7 @@
 MAP Client Plugin
 """
 
-__version__ = '0.10.2'
+__version__ = '0.11.0'
 __author__ = 'Richard Christie'
 __stepname__ = 'Scaffold Creator'
 __location__ = 'https://github.com/ABI-Software/mapclientplugins.scaffoldcreator'

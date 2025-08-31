@@ -13,7 +13,7 @@ from cmlibs.utils.zinc.scene import (
     scene_create_selection_group, scene_get_selection_group, scene_create_node_derivative_graphics)
 from cmlibs.zinc.field import Field, FieldGroup
 from cmlibs.zinc.glyph import Glyph
-from cmlibs.zinc.graphics import Graphics
+from cmlibs.zinc.graphics import Graphics, Graphicslineattributes
 from cmlibs.zinc.scenecoordinatesystem import SCENECOORDINATESYSTEM_WORLD
 from scaffoldmaker.annotation.annotationgroup import findAnnotationGroupByName, getAnnotationMarkerGroup, \
     getAnnotationMarkerLocationField, getAnnotationMarkerNameField
@@ -948,10 +948,7 @@ class ScaffoldCreatorModel:
         surfacesMaterial = self._materialmodule.findMaterialByName('trans_blue' if isTranslucent else 'solid_blue')
         surfaces.setMaterial(surfacesMaterial)
         lines = self._region.getScene().findGraphicsByName('displayLines')
-        lineattr = lines.getGraphicslineattributes()
-        isTranslucentLines = isTranslucent and (lineattr.getShapeType() == lineattr.SHAPE_TYPE_CIRCLE_EXTRUSION)
-        linesMaterial = self._materialmodule.findMaterialByName('trans_blue' if isTranslucentLines else 'default')
-        lines.setMaterial(linesMaterial)
+        lines.setMaterial(self._getDisplayThemeLinesMaterial(lines.getGraphicslineattributes().getShapeType()))
 
     def isDisplaySurfacesWireframe(self):
         return self._displaySettings['displaySurfacesWireframe']
@@ -1143,26 +1140,37 @@ class ScaffoldCreatorModel:
             pointattr.setBaseSize([axesScale])
             pointattr.setLabelText(1, '  {:2g}'.format(axesScale))
 
+    def _getDisplayThemeElementAxesMaterial(self):
+        return self._materialmodule.findMaterialByName('yellow' if (self._displayThemeName == 'Dark') else 'brown')
+
+    def _getDisplayThemeElementNumbersMaterial(self):
+        return self._materialmodule.findMaterialByName('cyan' if (self._displayThemeName == 'Dark') else 'blue')
+
+    def _getDisplayThemeLinesMaterial(self, shape_type):
+        if shape_type == Graphicslineattributes.SHAPE_TYPE_CIRCLE_EXTRUSION:
+            material_name = 'trans_blue' if self.isDisplaySurfacesTranslucent() else 'white'
+        else:
+            material_name = 'white' if (self._displayThemeName == 'Dark') else 'black'
+        return self._materialmodule.findMaterialByName(material_name)
+
+    def _getDisplayThemeMarkerMaterial(self):
+        material_name = 'white' if (self._displayThemeName == 'Dark') else 'black'
+        return self._materialmodule.findMaterialByName(material_name)
+
     def _applyDisplayTheme(self):
         if not self._scene:
             return
-        isDark = self._displayThemeName == 'Dark'
         with ChangeManager(self._scene):
-            points = self._scene.findGraphicsByName('displayPoints')
-            pointattr = points.getGraphicspointattributes()
-            if pointattr.getGlyphShapeType() == Glyph.SHAPE_TYPE_POINT:
-                points.setMaterial(self._materialmodule.findMaterialByName('default' if isDark else 'black'))
             lines = self._scene.findGraphicsByName('displayLines')
-            lineattr = lines.getGraphicslineattributes()
-            if lineattr.getShapeType() == lineattr.SHAPE_TYPE_LINE:
-                lines.setMaterial(self._materialmodule.findMaterialByName('default' if isDark else 'black'))
+            lines.setMaterial(self._getDisplayThemeLinesMaterial(lines.getGraphicslineattributes().getShapeType()))
             elementNumbers = self._scene.findGraphicsByName('displayElementNumbers')
-            elementNumbers.setMaterial(self._materialmodule.findMaterialByName('cyan' if isDark else 'blue'))
+            elementNumbers.setMaterial(self._getDisplayThemeElementNumbersMaterial())
             elementAxes = self._scene.findGraphicsByName('displayElementAxes')
-            elementAxes.setMaterial(self._materialmodule.findMaterialByName('yellow' if isDark else 'brown'))
+            elementAxes.setMaterial(self._getDisplayThemeElementAxesMaterial())
+            markerMaterial = self._getDisplayThemeMarkerMaterial()
             for graphicsName in ('displayMarkerPoints', 'displayMarkerNames'):
                 graphics = self._scene.findGraphicsByName(graphicsName)
-                graphics.setMaterial(self._materialmodule.findMaterialByName('default' if isDark else 'black'))
+                graphics.setMaterial(markerMaterial)
 
     def setDisplayTheme(self, displayThemeName):
         self._displayThemeName = displayThemeName
@@ -1203,6 +1211,7 @@ class ScaffoldCreatorModel:
             self._setGraphicsTransformation()
 
             axes = scene.createGraphicsPoints()
+            axes.setName('displayAxes')
             axes.setScenecoordinatesystem(SCENECOORDINATESYSTEM_WORLD)
             pointattr = axes.getGraphicspointattributes()
             pointattr.setGlyphShapeType(Glyph.SHAPE_TYPE_AXES_XYZ)
@@ -1210,10 +1219,10 @@ class ScaffoldCreatorModel:
             pointattr.setBaseSize([axesScale])
             pointattr.setLabelText(1, '  {:2g}'.format(axesScale))
             axes.setMaterial(self._materialmodule.findMaterialByName('grey50'))
-            axes.setName('displayAxes')
             axes.setVisibilityFlag(self.isDisplayAxes())
 
             lines = scene.createGraphicsLines()
+            lines.setName('displayLines')
             lines.setCoordinateField(coordinates)
             lines.setExterior(self.isDisplayLinesExterior())
             lineattr = lines.getGraphicslineattributes()
@@ -1222,13 +1231,11 @@ class ScaffoldCreatorModel:
                 lineattr.setBaseSize([0.0])
                 lineattr.setScaleFactors([2.0])
                 lineattr.setOrientationScaleField(radius)
-            isTranslucentLines = self.isDisplaySurfacesTranslucent() and (lineattr.getShapeType() == lineattr.SHAPE_TYPE_CIRCLE_EXTRUSION)
-            linesMaterial = self._materialmodule.findMaterialByName('trans_blue' if isTranslucentLines else 'default')
-            lines.setMaterial(linesMaterial)
-            lines.setName('displayLines')
+            lines.setMaterial(self._getDisplayThemeLinesMaterial(lineattr.getShapeType()))
             lines.setVisibilityFlag(self.isDisplayLines())
 
             nodePoints = scene.createGraphicsPoints()
+            nodePoints.setName('displayNodePoints')
             nodePoints.setFieldDomainType(Field.DOMAIN_TYPE_NODES)
             nodePoints.setCoordinateField(coordinates)
             pointattr = nodePoints.getGraphicspointattributes()
@@ -1239,17 +1246,16 @@ class ScaffoldCreatorModel:
                 pointattr.setOrientationScaleField(radius)
             else:
                 pointattr.setBaseSize([glyphWidth])
-            nodePoints.setName('displayNodePoints')
             nodePoints.setVisibilityFlag(self.isDisplayNodePoints())
 
             nodeNumbers = scene.createGraphicsPoints()
+            nodeNumbers.setName('displayNodeNumbers')
             nodeNumbers.setFieldDomainType(Field.DOMAIN_TYPE_NODES)
             nodeNumbers.setCoordinateField(coordinates)
             pointattr = nodeNumbers.getGraphicspointattributes()
             pointattr.setLabelField(cmiss_number)
             pointattr.setGlyphShapeType(Glyph.SHAPE_TYPE_NONE)
             nodeNumbers.setMaterial(self._materialmodule.findMaterialByName('green'))
-            nodeNumbers.setName('displayNodeNumbers')
             nodeNumbers.setVisibilityFlag(self.isDisplayNodeNumbers())
 
             nodeDerivativeFields = determine_node_field_derivatives(self._region, coordinates, True)
@@ -1259,24 +1265,26 @@ class ScaffoldCreatorModel:
                 self.getDisplayNodeDerivativeVersion())
 
             elementNumbers = scene.createGraphicsPoints()
+            elementNumbers.setName('displayElementNumbers')
             elementNumbers.setFieldDomainType(Field.DOMAIN_TYPE_MESH_HIGHEST_DIMENSION)
             elementNumbers.setCoordinateField(coordinates)
             pointattr = elementNumbers.getGraphicspointattributes()
             pointattr.setLabelField(cmiss_number)
             pointattr.setGlyphShapeType(Glyph.SHAPE_TYPE_NONE)
-            elementNumbers.setMaterial(self._materialmodule.findMaterialByName('cyan'))
-            elementNumbers.setName('displayElementNumbers')
+            elementNumbers.setMaterial(self._getDisplayThemeElementNumbersMaterial())
             elementNumbers.setVisibilityFlag(self.isDisplayElementNumbers())
+
             surfaces = scene.createGraphicsSurfaces()
+            surfaces.setName('displaySurfaces')
             surfaces.setCoordinateField(coordinates)
             surfaces.setRenderPolygonMode(Graphics.RENDER_POLYGON_MODE_WIREFRAME if self.isDisplaySurfacesWireframe() else Graphics.RENDER_POLYGON_MODE_SHADED)
             surfaces.setExterior(self.isDisplaySurfacesExterior() if (meshDimension == 3) else False)
             surfacesMaterial = self._materialmodule.findMaterialByName('trans_blue' if self.isDisplaySurfacesTranslucent() else 'solid_blue')
             surfaces.setMaterial(surfacesMaterial)
-            surfaces.setName('displaySurfaces')
             surfaces.setVisibilityFlag(self.isDisplaySurfaces())
 
             elementAxes = scene.createGraphicsPoints()
+            elementAxes.setName('displayElementAxes')
             elementAxes.setFieldDomainType(Field.DOMAIN_TYPE_MESH_HIGHEST_DIMENSION)
             elementAxes.setCoordinateField(coordinates)
             pointattr = elementAxes.getGraphicspointattributes()
@@ -1300,43 +1308,43 @@ class ScaffoldCreatorModel:
                 pointattr.setLabelText(2, "2")
                 pointattr.setLabelText(3, "3")
                 pointattr.setLabelOffset([1.1, 0.0, 0.0])
-            elementAxes.setMaterial(self._materialmodule.findMaterialByName('yellow'))
-            elementAxes.setName('displayElementAxes')
+            elementAxes.setMaterial(self._getDisplayThemeElementAxesMaterial())
             elementAxes.setVisibilityFlag(self.isDisplayElementAxes())
 
             # marker points, names
+            markerMaterial = self._getDisplayThemeMarkerMaterial()
 
             markerPoints = scene.createGraphicsPoints()
+            markerPoints.setName('displayMarkerPoints')
             markerPoints.setFieldDomainType(Field.DOMAIN_TYPE_NODES)
             markerPoints.setSubgroupField(markerGroup)
             markerPoints.setCoordinateField(markerHostCoordinates)
             pointattr = markerPoints.getGraphicspointattributes()
             pointattr.setGlyphShapeType(Glyph.SHAPE_TYPE_CROSS)
             pointattr.setBaseSize(2 * glyphWidth)
-            markerPoints.setName('displayMarkerPoints')
+            markerPoints.setMaterial(markerMaterial)
             markerPoints.setVisibilityFlag(self.isDisplayMarkerPoints())
 
             markerNames = scene.createGraphicsPoints()
+            markerNames.setName('displayMarkerNames')
             markerNames.setFieldDomainType(Field.DOMAIN_TYPE_NODES)
             markerNames.setSubgroupField(markerGroup)
             markerNames.setCoordinateField(markerHostCoordinates)
             pointattr = markerNames.getGraphicspointattributes()
             pointattr.setLabelText(1, '  ')
             pointattr.setLabelField(markerName)
-            markerNames.setName('displayMarkerNames')
+            markerNames.setMaterial(markerMaterial)
             markerNames.setVisibilityFlag(self.isDisplayMarkerNames())
 
             # zero Jacobian contours
             if jacobian:
                 contours = scene.createGraphicsContours()
+                contours.setName('displayZeroJacobianContours')
                 contours.setCoordinateField(coordinates)
                 contours.setIsoscalarField(jacobian)
                 contours.setListIsovalues([0.0])
                 contours.setMaterial(self._materialmodule.findMaterialByName('magenta'))
-                contours.setName('displayZeroJacobianContours')
                 contours.setVisibilityFlag(self.isDisplayZeroJacobianContours())
-
-            self._applyDisplayTheme()
 
         logger = self._context.getLogger()
         loggerMessageCount = logger.getNumberOfMessages()

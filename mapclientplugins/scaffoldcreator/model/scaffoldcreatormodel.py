@@ -394,7 +394,8 @@ class ScaffoldCreatorModel:
                     selectionNodesetGroup.addNode(markerNode)
                 else:
                     group = annotationGroup.getGroup()
-                    group_add_group_elements(selectionGroup, group, group_get_highest_dimension(group))
+                    highest_dimension = group_get_highest_dimension(group)
+                    group_add_group_elements(selectionGroup, group, highest_dimension, highest_dimension_only=False)
             else:
                 if selectionGroup:
                     selectionGroup.clear()

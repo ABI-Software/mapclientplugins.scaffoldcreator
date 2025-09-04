@@ -1,6 +1,7 @@
 from cmlibs.utils.zinc.general import ChangeManager
 from cmlibs.zinc.field import Field, FieldGroup
 from cmlibs.zinc.glyph import Glyph
+from cmlibs.zinc.graphics import Graphicslineattributes
 from cmlibs.zinc.result import RESULT_OK
 from cmlibs.zinc.spectrum import Spectrum, Spectrumcomponent
 
@@ -184,20 +185,27 @@ class SegmentationDataModel:
     def setDisplayDataMarkerNames(self, show):
         self._setVisibility('displayDataMarkerNames', show)
 
+    def _getDisplayThemeLinesMaterial(self, shape_type):
+        if shape_type == Graphicslineattributes.SHAPE_TYPE_CIRCLE_EXTRUSION:
+            material_name = 'white'
+        else:
+            material_name = 'white' if (self._displayThemeName == 'Dark') else 'black'
+        return self._materialmodule.findMaterialByName(material_name)
+
+    def _getDisplayThemeMarkerMaterial(self):
+        material_name = 'yellow' if (self._displayThemeName == 'Dark') else 'brown'
+        return self._materialmodule.findMaterialByName(material_name)
+
     def _applyDisplayTheme(self):
         if not self._scene:
             return
-        isDark = self._displayThemeName == 'Dark'
-        with ChangeManager(self._scene):
-            points = self._scene.findGraphicsByName('displayDataPoints')
-            pointattr = points.getGraphicspointattributes()
-            if pointattr.getGlyphShapeType() == Glyph.SHAPE_TYPE_POINT:
-                points.setMaterial(self._materialmodule.findMaterialByName('default' if isDark else 'black'))
+        with (ChangeManager(self._scene)):
             lines = self._scene.findGraphicsByName('displayDataLines')
-            lines.setMaterial(self._materialmodule.findMaterialByName('default' if isDark else 'black'))
+            lines.setMaterial(self._getDisplayThemeLinesMaterial(lines.getGraphicslineattributes().getShapeType()))
+            markerMaterial = self._getDisplayThemeMarkerMaterial()
             for graphicsName in ('displayDataMarkerPoints', 'displayDataMarkerNames'):
                 graphics = self._scene.findGraphicsByName(graphicsName)
-                graphics.setMaterial(self._materialmodule.findMaterialByName('yellow' if isDark else 'brown'))
+                graphics.setMaterial(markerMaterial)
 
     def setDisplayTheme(self, displayThemeName):
         self._displayThemeName = displayThemeName
@@ -227,6 +235,7 @@ class SegmentationDataModel:
             # data points - nodes if any, otherwise datapoints
 
             points = self._scene.createGraphicsPoints()
+            points.setName('displayDataPoints')
             points.setFieldDomainType(Field.DOMAIN_TYPE_NODES if (nodes.getSize() > 0) else Field.DOMAIN_TYPE_DATAPOINTS)
             if coordinates:
                 points.setCoordinateField(coordinates)
@@ -244,30 +253,32 @@ class SegmentationDataModel:
                 points.setMaterial(self._materialmodule.findMaterialByName("grey50"))
             points.setDataField(rgb)
             points.setSpectrum(self._rgbSpectrum)
-            points.setName('displayDataPoints')
             points.setVisibilityFlag(self.isDisplayDataPoints())
 
             # data lines
 
             lines = self._scene.createGraphicsLines()
+            lines.setName('displayDataLines')
             if coordinates:
                 lines.setCoordinateField(coordinates)
             if dataGroup:
                 lines.setSubgroupField(dataGroup)
+            lineattr = lines.getGraphicslineattributes()
             if self.isDisplayDataRadius() and radius.isValid():
-                lineattr = lines.getGraphicslineattributes()
                 lineattr.setShapeType(lineattr.SHAPE_TYPE_CIRCLE_EXTRUSION)
                 lineattr.setBaseSize([0.0])
                 lineattr.setScaleFactors([2.0])
                 lineattr.setOrientationScaleField(radius)
             lines.setDataField(rgb)
             lines.setSpectrum(self._rgbSpectrum)
-            lines.setName('displayDataLines')
+            lines.setMaterial(self._getDisplayThemeLinesMaterial(lineattr.getShapeType()))
             lines.setVisibilityFlag(self.isDisplayDataLines())
 
             # data marker points, names
+            markerMaterial = self._getDisplayThemeMarkerMaterial()
 
             markerPoints = self._scene.createGraphicsPoints()
+            markerPoints.setName('displayDataMarkerPoints')
             markerPoints.setFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
             markerPoints.setSubgroupField(markerGroup)
             if markerDataCoordinates:
@@ -275,11 +286,11 @@ class SegmentationDataModel:
             pointattr = markerPoints.getGraphicspointattributes()
             pointattr.setGlyphShapeType(Glyph.SHAPE_TYPE_POINT)
             markerPoints.setRenderPointSize(2.0)
-            markerPoints.setMaterial(self._materialmodule.findMaterialByName("yellow"))
-            markerPoints.setName('displayDataMarkerPoints')
+            markerPoints.setMaterial(markerMaterial)
             markerPoints.setVisibilityFlag(self.isDisplayDataMarkerPoints())
 
             markerNames = self._scene.createGraphicsPoints()
+            markerNames.setName('displayDataMarkerNames')
             markerNames.setFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
             markerNames.setSubgroupField(markerGroup)
             if markerDataCoordinates:
@@ -288,8 +299,5 @@ class SegmentationDataModel:
             pointattr.setGlyphShapeType(Glyph.SHAPE_TYPE_NONE)
             pointattr.setLabelText(1, " ")
             pointattr.setLabelField(markerName)
-            markerNames.setMaterial(self._materialmodule.findMaterialByName("yellow"))
-            markerNames.setName('displayDataMarkerNames')
+            markerNames.setMaterial(markerMaterial)
             markerNames.setVisibilityFlag(self.isDisplayDataMarkerNames())
-
-            self._applyDisplayTheme()

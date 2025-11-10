@@ -56,7 +56,8 @@ class ScaffoldCreator(WorkflowStepMountPoint):
         """
         Ensure self._model is constructed if not already existing.
         """
-        if not self._model:
+        refresh_model = True if self._model is None else self._model.getLocation() != self._location
+        if refresh_model:
             self._model = MasterModel(self._location, self._config['identifier'])
 
     def execute(self):

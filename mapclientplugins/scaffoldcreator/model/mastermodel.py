@@ -64,6 +64,9 @@ class MasterModel:
         glyphmodule = self._context.getGlyphmodule()
         glyphmodule.defineStandardGlyphs()
 
+    def getLocation(self):
+        return self._location
+
     def getIdentifier(self):
         return self._identifier
 

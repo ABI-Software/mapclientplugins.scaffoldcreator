@@ -166,6 +166,7 @@ class ScaffoldCreatorWidget(QtWidgets.QMainWindow):
         self._scaffold_settings_ui.scale_lineEdit.editingFinished.connect(self._scaleLineEditChanged)
         self._scaffold_settings_ui.translation_lineEdit.editingFinished.connect(self._translationLineEditChanged)
         self._scaffold_settings_ui.applyTransformation_pushButton.clicked.connect(self._applyTransformationButtonPressed)
+        self._scaffold_settings_ui.autoAlignTransformation_pushButton.clicked.connect(self._autoAlignTransformationButtonPressed)
         self._display_settings_ui.displayDataGroup_fieldChooser.setNullObjectName('-')
         self._display_settings_ui.displayDataGroup_fieldChooser.setRegion(self._segmentation_data_model.getRegion())
         self._display_settings_ui.displayDataGroup_fieldChooser.setConditional(field_is_managed_group)
@@ -699,6 +700,55 @@ class ScaffoldCreatorWidget(QtWidgets.QMainWindow):
     def _applyTransformationButtonPressed(self):
         self._scaffold_model.applyTransformation(self._display_settings_ui.displayModelCoordinates_fieldChooser.getField())
         self._transformationChanged()
+
+    def _autoAlignTransformationButtonPressed(self):
+        # Create dialog
+        reply = QtWidgets.QDialog(self)
+        reply.setWindowTitle('Confirm action')
+        layout = QtWidgets.QVBoxLayout(reply)
+        hasData = self._segmentation_data_model.hasData()
+        if not hasData:
+            # Add text
+            textLabel = QtWidgets.QLabel('No data file supplied')
+            textLabel.setWordWrap(True)
+            layout.addWidget(textLabel)
+            layout.addSpacing(10)
+            # add Ok Button
+            buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.StandardButton.Ok)
+            buttons.accepted.connect(reply.reject)    
+            layout.addWidget(buttons)
+        else:
+            # Initilize fitter 
+            canAutoAlign = self._scaffold_model.initializeAutoAlignTransformation()
+            if canAutoAlign:
+                # Add text
+                textLabel = QtWidgets.QLabel('Automatically align scaffold to data?')
+                textLabel.setWordWrap(True)
+                layout.addWidget(textLabel)
+                layout.addSpacing(10)
+                # Add buttons
+                buttons = QtWidgets.QDialogButtonBox(
+                    QtWidgets.QDialogButtonBox.StandardButton.Yes |
+                      QtWidgets.QDialogButtonBox.StandardButton.No
+                )
+                layout.addWidget(buttons)   
+                buttons.accepted.connect(reply.accept)
+                buttons.rejected.connect(reply.reject)
+            else:
+                # Add text
+                textLabel = QtWidgets.QLabel('Not enough markers and/or groups' \
+                ' to perform automatic alignment to data')
+                textLabel.setWordWrap(True)
+                layout.addWidget(textLabel)
+                layout.addSpacing(10)
+                # add Ok Button
+                buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.StandardButton.Ok)
+                layout.addWidget(buttons)
+                buttons.accepted.connect(reply.reject)    
+        # Execute dialog
+        if reply.exec() == QtWidgets.QDialog.Accepted:
+            self._scaffold_model.runAutoAlignTransformation()
+            self._transformationChanged()
 
     def _displayDataGroupChanged(self, index):
         """

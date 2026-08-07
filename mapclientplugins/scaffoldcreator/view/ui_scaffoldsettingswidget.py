@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'scaffoldsettingswidget.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.8.1
+## Created by: Qt User Interface Compiler version 6.9.1
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -23,7 +23,7 @@ class Ui_ScaffoldSettings(object):
     def setupUi(self, ScaffoldSettings):
         if not ScaffoldSettings.objectName():
             ScaffoldSettings.setObjectName(u"ScaffoldSettings")
-        ScaffoldSettings.resize(556, 773)
+        ScaffoldSettings.resize(554, 773)
         self.verticalLayout_2 = QVBoxLayout(ScaffoldSettings)
         self.verticalLayout_2.setObjectName(u"verticalLayout_2")
         self.verticalLayout_2.setContentsMargins(0, 0, 0, 0)
@@ -35,7 +35,7 @@ class Ui_ScaffoldSettings(object):
         sizePolicy.setHeightForWidth(self.subscaffold_frame.sizePolicy().hasHeightForWidth())
         self.subscaffold_frame.setSizePolicy(sizePolicy)
         self.subscaffold_frame.setMinimumSize(QSize(0, 0))
-        self.subscaffold_frame.setFrameShape(QFrame.NoFrame)
+        self.subscaffold_frame.setFrameShape(QFrame.Shape.NoFrame)
         self.verticalLayout_5 = QVBoxLayout(self.subscaffold_frame)
         self.verticalLayout_5.setObjectName(u"verticalLayout_5")
         self.subscaffold_label = QLabel(self.subscaffold_frame)
@@ -71,36 +71,36 @@ class Ui_ScaffoldSettings(object):
 
         self.meshType_frame = QFrame(ScaffoldSettings)
         self.meshType_frame.setObjectName(u"meshType_frame")
-        self.meshType_frame.setFrameShape(QFrame.NoFrame)
+        self.meshType_frame.setFrameShape(QFrame.Shape.NoFrame)
         self.formLayout = QFormLayout(self.meshType_frame)
         self.formLayout.setObjectName(u"formLayout")
         self.formLayout.setContentsMargins(0, -1, 0, -1)
         self.meshType_label = QLabel(self.meshType_frame)
         self.meshType_label.setObjectName(u"meshType_label")
 
-        self.formLayout.setWidget(0, QFormLayout.LabelRole, self.meshType_label)
+        self.formLayout.setWidget(0, QFormLayout.ItemRole.LabelRole, self.meshType_label)
 
         self.meshType_comboBox = QComboBox(self.meshType_frame)
         self.meshType_comboBox.setObjectName(u"meshType_comboBox")
 
-        self.formLayout.setWidget(0, QFormLayout.FieldRole, self.meshType_comboBox)
+        self.formLayout.setWidget(0, QFormLayout.ItemRole.FieldRole, self.meshType_comboBox)
 
         self.parameterSet_label = QLabel(self.meshType_frame)
         self.parameterSet_label.setObjectName(u"parameterSet_label")
 
-        self.formLayout.setWidget(1, QFormLayout.LabelRole, self.parameterSet_label)
+        self.formLayout.setWidget(1, QFormLayout.ItemRole.LabelRole, self.parameterSet_label)
 
         self.parameterSet_comboBox = QComboBox(self.meshType_frame)
         self.parameterSet_comboBox.setObjectName(u"parameterSet_comboBox")
 
-        self.formLayout.setWidget(1, QFormLayout.FieldRole, self.parameterSet_comboBox)
+        self.formLayout.setWidget(1, QFormLayout.ItemRole.FieldRole, self.parameterSet_comboBox)
 
 
         self.verticalLayout_2.addWidget(self.meshType_frame)
 
         self.meshTypeOptions_frame = QFrame(ScaffoldSettings)
         self.meshTypeOptions_frame.setObjectName(u"meshTypeOptions_frame")
-        self.meshTypeOptions_frame.setFrameShape(QFrame.NoFrame)
+        self.meshTypeOptions_frame.setFrameShape(QFrame.Shape.NoFrame)
         self.verticalLayout_9 = QVBoxLayout(self.meshTypeOptions_frame)
         self.verticalLayout_9.setObjectName(u"verticalLayout_9")
         self.verticalLayout_9.setContentsMargins(0, -1, 0, -1)
@@ -109,12 +109,12 @@ class Ui_ScaffoldSettings(object):
 
         self.modifyOptions_frame = QFrame(ScaffoldSettings)
         self.modifyOptions_frame.setObjectName(u"modifyOptions_frame")
-        self.modifyOptions_frame.setFrameShape(QFrame.NoFrame)
+        self.modifyOptions_frame.setFrameShape(QFrame.Shape.NoFrame)
         self.verticalLayout = QVBoxLayout(self.modifyOptions_frame)
         self.verticalLayout.setObjectName(u"verticalLayout")
         self.deleteElementsRanges_frame = QFrame(self.modifyOptions_frame)
         self.deleteElementsRanges_frame.setObjectName(u"deleteElementsRanges_frame")
-        self.deleteElementsRanges_frame.setFrameShape(QFrame.NoFrame)
+        self.deleteElementsRanges_frame.setFrameShape(QFrame.Shape.NoFrame)
         self.verticalLayout_10 = QVBoxLayout(self.deleteElementsRanges_frame)
         self.verticalLayout_10.setObjectName(u"verticalLayout_10")
         self.verticalLayout_10.setContentsMargins(0, 0, 0, 0)
@@ -197,6 +197,24 @@ class Ui_ScaffoldSettings(object):
 
         self.verticalLayout.addLayout(self.horizontalLayout_12)
 
+        self.horizontalLayout_5 = QHBoxLayout()
+        self.horizontalLayout_5.setObjectName(u"horizontalLayout_5")
+        self.horizontalSpacer_2 = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+
+        self.horizontalLayout_5.addItem(self.horizontalSpacer_2)
+
+        self.autoAlignTransformation_pushButton = QPushButton(self.modifyOptions_frame)
+        self.autoAlignTransformation_pushButton.setObjectName(u"autoAlignTransformation_pushButton")
+
+        self.horizontalLayout_5.addWidget(self.autoAlignTransformation_pushButton)
+
+        self.horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+
+        self.horizontalLayout_5.addItem(self.horizontalSpacer)
+
+
+        self.verticalLayout.addLayout(self.horizontalLayout_5)
+
 
         self.verticalLayout_2.addWidget(self.modifyOptions_frame)
 
@@ -222,5 +240,6 @@ class Ui_ScaffoldSettings(object):
         self.scale_label.setText(QCoreApplication.translate("ScaffoldSettings", u"Scale x, y, z:", None))
         self.translation_label.setText(QCoreApplication.translate("ScaffoldSettings", u"Translation x, y, z", None))
         self.applyTransformation_pushButton.setText(QCoreApplication.translate("ScaffoldSettings", u"Apply transformation", None))
+        self.autoAlignTransformation_pushButton.setText(QCoreApplication.translate("ScaffoldSettings", u"Auto align", None))
     # retranslateUi
 

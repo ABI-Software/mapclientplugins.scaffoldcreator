@@ -8,7 +8,7 @@ from cmlibs.utils.zinc.finiteelement import evaluateFieldNodesetRange
 from cmlibs.utils.zinc.general import ChangeManager, HierarchicalChangeManager
 from cmlibs.utils.zinc.group import group_add_group_elements, group_get_highest_dimension, \
     identifier_ranges_fix, identifier_ranges_from_string, identifier_ranges_to_string, mesh_group_to_identifier_ranges
-from cmlibs.utils.zinc.region import determine_appropriate_glyph_size
+from cmlibs.utils.zinc.region import determine_appropriate_glyph_size, copy_fitting_data
 from cmlibs.utils.zinc.scene import (
     scene_create_selection_group, scene_get_selection_group, scene_create_node_derivative_graphics)
 from cmlibs.zinc.field import Field, FieldGroup
@@ -18,8 +18,11 @@ from cmlibs.zinc.scenecoordinatesystem import SCENECOORDINATESYSTEM_WORLD
 from scaffoldmaker.annotation.annotationgroup import findAnnotationGroupByName, getAnnotationMarkerGroup, \
     getAnnotationMarkerLocationField, getAnnotationMarkerNameField
 from scaffoldmaker.scaffolds import Scaffolds
+from scaffoldmaker.utils.zinc_utils import find_or_create_field_zero_fibres
 from scaffoldmaker.scaffoldpackage import ScaffoldPackage
 from scaffoldmaker.utils.exportvtk import ExportVtk
+from scaffoldfitter.fitter import Fitter as GeometryFitter
+from scaffoldfitter.fitterstepalign import FitterStepAlign
 
 import copy
 import math
@@ -733,6 +736,65 @@ class ScaffoldCreatorModel:
                 self._updateScaffoldEdits()
                 self._checkCustomParameterSet()
                 self._setGraphicsTransformation()
+
+    def initializeAutoAlignTransformation(self):
+        """
+        Initialize the fitter for the automatic align process
+        """
+        scaffold_region = self._region
+        # Load data into the current region (copied from load_vagus_data in 3d_nerve1)
+        # This way of loading data is probably not completely right? Need to consult for a better way
+        data_region = self._parentRegion.findChildByName('data') 
+        data_fieldmodule = data_region.getFieldmodule()
+        with ChangeManager(data_fieldmodule):
+            copy_fitting_data(scaffold_region, data_region)
+        del data_region, data_fieldmodule
+        # Setup fitting routine
+        fieldmodule = scaffold_region.getFieldmodule()
+        self.fitter = GeometryFitter(region=scaffold_region)
+        self.fitter.getInitialFitterStepConfig()
+        # Load the _loadModel routines
+        self.fitter._discoverModelCoordinatesField()
+        self.fitter._discoverModelFitGroup()
+        zero_fibres = find_or_create_field_zero_fibres(fieldmodule)
+        self.fitter.setFibreField(zero_fibres)
+        del zero_fibres
+        self.fitter._discoverFlattenGroup()
+        self.fitter.defineCommonMeshFields()
+        # Load the _loadData routines
+        self.fitter._discoverDataCoordinatesField()
+        self.fitter._discoverMarkerGroup()
+        self.fitter.defineDataProjectionFields()
+        # Start fit
+        self.fitter.initializeFit()
+        fit1 = FitterStepAlign()
+        self.fitter.addFitterStep(fit1)
+        return fit1.canAutoAlign()
+    
+    def runAutoAlignTransformation(self):
+        """
+        Run the align step and update visual settings
+        """
+        scaffoldPackage = self._scaffoldPackages[-1]
+        fit1 = self.fitter.getFitterSteps()[-1]
+        # Add markers/groups to align step if possible
+        if fit1.canAlignMarkers():
+            fit1.setAlignMarkers(True)
+        if fit1.canAlignGroups():
+            fit1.setAlignGroups(True)
+        # Run align step
+        fit1._doAutoAlign()
+        # Store align rotation settings
+        rotation = [rad * 180.0 / math.pi for rad in fit1._rotation]
+        scale = [fit1._scale for i in range(3)]
+        translation = fit1._translation
+        del fit1
+        # If any visual settings changes, update graphics settings
+        update_rotation = scaffoldPackage.setRotation(rotation)
+        update_scale = scaffoldPackage.setScale(scale) 
+        update_translation =  scaffoldPackage.setTranslation(translation)
+        if update_rotation or update_scale or update_translation:
+            self._setGraphicsTransformation()    
 
     def getRotationText(self):
         return ', '.join(STRING_FLOAT_FORMAT.format(value) for value in self._scaffoldPackages[-1].getRotation())
